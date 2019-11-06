@@ -11,7 +11,7 @@ local LibStub = _G.LibStub
 local PlayerNotes = LibStub("AceAddon-3.0"):NewAddon("PlayerNotes", "AceConsole-3.0", "AceHook-3.0", "AceEvent-3.0", "AceTimer-3.0")
 
 local ADDON_NAME, AddonData = ...
-local ADDON_VERSION = "8.2.1"
+local ADDON_VERSION = GetAddOnMetadata(ADDON_NAME, "Version")
 
 local NotesDB = AddonData.NotesDB
 
@@ -1535,7 +1535,7 @@ function PlayerNotes:CreateAddNoteFrame()
     nameLabel:SetPoint("TOP", headertext, "BOTTOM", 0, -30)
     nameLabel:SetPoint("LEFT", addwindow, "LEFT", 20, 0)
     nameLabel:SetTextColor(1.0, 1.0, 1.0, 1)
-    nameLabel:SetText(L["Player name"] .. ":")
+    nameLabel:SetText(L["Player Name"] .. ":")
 
     local charname = _G.CreateFrame("EditBox", nil, addwindow, "InputBoxTemplate")
     charname:SetFontObject(_G.ChatFontNormal)
