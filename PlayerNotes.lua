@@ -1,0 +1,2602 @@
+local _G = getfenv(0)
+
+local string = _G.string
+local table = _G.table
+local math = _G.math
+local pairs = _G.pairs
+local ipairs = _G.ipairs
+local select = _G.select
+local LibStub = _G.LibStub
+
+local PlayerNotes = LibStub("AceAddon-3.0"):NewAddon("PlayerNotes", "AceConsole-3.0", "AceHook-3.0", "AceEvent-3.0", "AceTimer-3.0")
+
+local ADDON_NAME, AddonData = ...
+local ADDON_VERSION = "8.2.1"
+
+local NotesDB = AddonData.NotesDB
+
+local CURRENT_BUILD, CURRENT_INTERNAL,
+CURRENT_BUILD_DATE, CURRENT_UI_VERSION = GetBuildInfo()
+
+-- Local versions for performance
+local tinsert, tremove, tconcat = table.insert, table.remove, table.concat
+local sub = string.sub
+local wipe = _G.wipe
+
+local L = LibStub("AceLocale-3.0"):GetLocale("PlayerNotes", true)
+local AGU = LibStub("AceGUI-3.0")
+local LibDeformat = LibStub("LibDeformat-3.0")
+local LDB = LibStub("LibDataBroker-1.1")
+local icon = LibStub("LibDBIcon-1.0")
+local LibAlts = LibStub("LibAlts-1.0")
+
+local GREEN = "|cff00ff00"
+local YELLOW = "|cffffff00"
+local RED = "|cffff0000"
+local BLUE = "|cff0198e1"
+local ORANGE = "|cffff9933"
+local WHITE = "|cffffffff"
+
+local CharNoteTooltip = nil
+
+-- Functions defined at the end of the file.
+local wrap
+
+-- String formats
+local chatNoteFormat = "%s%s: " .. WHITE .. "%s" .. "|r"
+local chatNoteWithMainFormat = "%s%s (%s): " .. WHITE .. "%s" .. "|r"
+local tooltipNoteFormat = "%s" .. L["Note: "] .. WHITE .. "%s" .. "|r"
+local tooltipNoteWithMainFormat = "%s" .. L["Note"] .. " (%s): " .. WHITE .. "%s" .. "|r"
+
+local defaults = {
+    profile = {
+        minimap = {
+            hide = true,
+        },
+        verbose = true,
+        debug = false,
+        mouseoverHighlighting = true,
+        showNotesOnWho = true,
+        showNotesOnLogon = false,
+        showNotesInTooltips = true,
+        noteLinksInChat = false,
+        useLibAlts = true,
+        wrapTooltip = true,
+        wrapTooltipLength = 50,
+        notesForRaidMembers = false,
+        notesForPartyMembers = false,
+        lock_main_window = false,
+        remember_main_pos = true,
+        notes_window_x = 0,
+        notes_window_y = 0,
+        remember_tooltip_pos = true,
+        lock_tooltip = false,
+        note_tooltip_x = nil,
+        note_tooltip_y = nil,
+        exportUseName = true,
+        exportUseNote = true,
+        exportUseRating = true,
+        exportEscape = true,
+        multilineNotes = false,
+        menusToModify = {
+            ["PLAYER"] = true,
+            ["PARTY"] = true,
+            ["FRIEND"] = true,
+            ["FRIEND_OFFLINE"] = true,
+            ["BN_FRIEND"] = true,
+            ["RAID_PLAYER"] = true,
+            ["CHAT_ROSTER"] = true,
+            ["COMMUNITIES_GUILD_MEMBER"] = true
+        },
+    },
+    realm = {
+        notes = {},
+        ratings = {}
+    }
+}
+
+local options
+local noteLDB = nil
+local notesFrame = nil
+local editNoteFrame = nil
+local addNoteFrame = nil
+local confirmDeleteFrame = nil
+local notesData = {}
+local previousGroup = {}
+local playerName = _G.GetUnitName("player", true)
+local uiHooks = {}
+
+local RATING_COL = 1
+local NAME_COL = 2
+local NOTE_COL = 3
+
+local RED_COLOR = { ["r"] = 1, ["g"] = 0, ["b"] = 0, ["a"] = 1 }
+local YELLOW_COLOR = { ["r"] = 1, ["g"] = 1, ["b"] = 0, ["a"] = 1 }
+local GREEN_COLOR = { ["r"] = 0, ["g"] = 1, ["b"] = 0, ["a"] = 1 }
+
+local RATING_OPTIONS = {
+    [-1] = { "Negative", RED, RED_COLOR, "Interface\\RAIDFRAME\\ReadyCheck-NotReady.blp" },
+    [0] = { "Neutral", YELLOW, YELLOW_COLOR, "" },
+    [1] = { "Positive", GREEN, GREEN_COLOR, "Interface\\RAIDFRAME\\ReadyCheck-Ready.blp" },
+}
+
+local function GetRatingColor(rating)
+    local color = YELLOW
+    if rating ~= nil and rating >= -1 and rating <= 1 then
+        local ratingInfo = RATING_OPTIONS[rating]
+        if ratingInfo and ratingInfo[2] then
+            color = ratingInfo[2]
+        end
+    end
+    return color
+end
+
+local function GetRatingColorObj(rating)
+    local color = YELLOW_COLOR
+    if rating ~= nil and rating >= -1 and rating <= 1 then
+        local ratingInfo = RATING_OPTIONS[rating]
+        if ratingInfo and ratingInfo[3] then
+            color = ratingInfo[3]
+        end
+    end
+    return color
+end
+
+local function GetRatingImage(rating)
+    local image = ""
+    if rating ~= nil and rating >= -1 and rating <= 1 then
+        local ratingInfo = RATING_OPTIONS[rating]
+        if ratingInfo and ratingInfo[4] then
+            image = ratingInfo[4]
+        end
+    end
+    return image
+end
+
+function PlayerNotes:GetOptions()
+    if not options then
+        options = {
+            name = ADDON_NAME,
+            type = 'group',
+            args = {
+                core = {
+                    order = 1,
+                    name = "General Options",
+                    type = "group",
+                    args = {
+                        headerGeneralOptions = {
+                            order = 0,
+                            type = "header",
+                            name = "General Options",
+                        },
+                        minimap = {
+                            name = L["Minimap Button"],
+                            desc = L["Toggle the minimap button"],
+                            type = "toggle",
+                            set = function(info, val)
+                                -- Reverse the value since the stored value is to hide it
+                                self.db.profile.minimap.hide = not val
+                                if self.db.profile.minimap.hide then
+                                    icon:Hide("PlayerNotesLDB")
+                                else
+                                    icon:Show("PlayerNotesLDB")
+                                end
+                            end,
+                            get = function(info)
+                                -- Reverse the value since the stored value is to hide it
+                                return not self.db.profile.minimap.hide
+                            end,
+                            order = 10
+                        },
+                        useLibAlts = {
+                            name = L["Use LibAlts Data"],
+                            desc = L["Toggles the use of LibAlts data if present.  If present and no note is found for a character, the note for the main will be shown if found."],
+                            type = "toggle",
+                            set = function(info, val) self.db.profile.useLibAlts = val end,
+                            get = function(info) return self.db.profile.useLibAlts end,
+                            order = 20
+                        },
+                        mouseoverHighlighting = {
+                            name = L["Mouseover Highlighting"],
+                            desc = L["Toggles mouseover highlighting for tables."],
+                            type = "toggle",
+                            set = function(info, val)
+                                self.db.profile.mouseoverHighlighting = val
+                                self:UpdateMouseoverHighlighting(val)
+                            end,
+                            get = function(info)
+                                return self.db.profile.mouseoverHighlighting
+                            end,
+                            order = 30
+                        },
+                        verbose = {
+                            name = L["Verbose"],
+                            desc = L["Toggles the display of informational messages"],
+                            type = "toggle",
+                            set = function(info, val) self.db.profile.verbose = val end,
+                            get = function(info) return self.db.profile.verbose end,
+                            order = 40
+                        },
+                        multilineNotes = {
+                            name = L["Multiline Notes"],
+                            desc = L["MultilineNotes_OptionDesc"],
+                            type = "toggle",
+                            set = function(info, val) self.db.profile.multilineNotes = val end,
+                            get = function(info) return self.db.profile.multilineNotes end,
+                            order = 50
+                        },
+                        headerNoteDisplay = {
+                            order = 100,
+                            type = "header",
+                            name = L["Note Display"],
+                        },
+                        noteLinksInChat = {
+                            name = L["Note Links"],
+                            desc = L["NoteLinks_OptionDesc"],
+                            type = "toggle",
+                            set = function(info, val)
+                                self.db.profile.noteLinksInChat = val
+                                if val then
+                                    self:EnableNoteLinks()
+                                else
+                                    self:DisableNoteLinks()
+                                end
+                            end,
+                            get = function(info) return self.db.profile.noteLinksInChat end,
+                            order = 110
+                        },
+                        showNotesOnWho = {
+                            name = L["Show notes with who results"],
+                            desc = L["Toggles showing notes for /who results in the chat window."],
+                            type = "toggle",
+                            set = function(info, val) self.db.profile.showNotesOnWho = val end,
+                            get = function(info) return self.db.profile.showNotesOnWho end,
+                            order = 120
+                        },
+                        showNotesOnLogon = {
+                            name = L["Show notes at logon"],
+                            desc = L["Toggles showing notes when a friend or guild memeber logs on."],
+                            type = "toggle",
+                            set = function(info, val) self.db.profile.showNotesOnLogon = val end,
+                            get = function(info) return self.db.profile.showNotesOnLogon end,
+                            order = 130
+                        },
+                        headerNoteLinks = {
+                            order = 150,
+                            type = "header",
+                            name = L["Note Links"],
+                        },
+                        lock_note_tooltip = {
+                            name = L["Lock"],
+                            desc = L["LockNoteTooltip_OptionDesc"],
+                            type = "toggle",
+                            set = function(info, val)
+                                self.db.profile.lock_tooltip = val
+                            end,
+                            get = function(info) return self.db.profile.lock_tooltip end,
+                            order = 160
+                        },
+                        remember_tooltip_pos = {
+                            name = L["Remember Position"],
+                            desc = L["RememberPositionNoteTooltip_OptionDesc"],
+                            type = "toggle",
+                            set = function(info, val) self.db.profile.remember_tooltip_pos = val end,
+                            get = function(info) return self.db.profile.remember_tooltip_pos end,
+                            order = 170
+                        },
+                        headerTooltipOptions = {
+                            order = 200,
+                            type = "header",
+                            name = L["Tooltip Options"],
+                        },
+                        showNotesInTooltips = {
+                            name = L["Show notes in tooltips"],
+                            desc = L["Toggles showing notes in unit tooltips."],
+                            type = "toggle",
+                            set = function(info, val) self.db.profile.showNotesInTooltips = val end,
+                            get = function(info) return self.db.profile.showNotesInTooltips end,
+                            order = 210
+                        },
+                        wrapTooltip = {
+                            name = L["Wrap Tooltips"],
+                            desc = L["Wrap notes in tooltips at the specified line length.  Subsequent lines are indented."],
+                            type = "toggle",
+                            set = function(info, val) self.db.profile.wrapTooltip = val end,
+                            get = function(info) return self.db.profile.wrapTooltip end,
+                            order = 220
+                        },
+                        wrapTooltipLength = {
+                            name = L["Tooltip Wrap Length"],
+                            desc = L["Maximum line length for a tooltip"],
+                            type = "range",
+                            min = 20,
+                            max = 80,
+                            step = 1,
+                            set = function(info, val) self.db.profile.wrapTooltipLength = val end,
+                            get = function(info) return self.db.profile.wrapTooltipLength end,
+                            order = 230
+                        },
+                        headerMainWindow = {
+                            order = 300,
+                            type = "header",
+                            name = L["Notes Window"],
+                        },
+                        lock_main_window = {
+                            name = L["Lock"],
+                            desc = L["Lock_OptionDesc"],
+                            type = "toggle",
+                            set = function(info, val)
+                                self.db.profile.lock_main_window = val
+                                notesFrame.lock = val
+                            end,
+                            get = function(info) return self.db.profile.lock_main_window end,
+                            order = 310
+                        },
+                        remember_main_pos = {
+                            name = L["Remember Position"],
+                            desc = L["RememberPosition_OptionDesc"],
+                            type = "toggle",
+                            set = function(info, val) self.db.profile.remember_main_pos = val end,
+                            get = function(info) return self.db.profile.remember_main_pos end,
+                            order = 320
+                        },
+                        headerPartyRaid = {
+                            order = 400,
+                            type = "header",
+                            name = L["Notes for Party and Raid Members"],
+                        },
+                        descNotesGroup = {
+                            order = 410,
+                            type = "description",
+                            name = L["These options control if notes are displayed in the chat window for any members who have a note.  Notes are shown when joining a raid or a new member joins."]
+                        },
+                        notesForPartyMembers = {
+                            name = L["Party Members"],
+                            desc = L["Toggles displaying notes for party members."],
+                            type = "toggle",
+                            set = function(info, val) self.db.profile.notesForPartyMembers = val end,
+                            get = function(info) return self.db.profile.notesForPartyMembers end,
+                            order = 420
+                        },
+                        notesForRaidMembers = {
+                            name = L["Raid Members"],
+                            desc = L["Toggles displaying notes for raid members."],
+                            type = "toggle",
+                            set = function(info, val) self.db.profile.notesForRaidMembers = val end,
+                            get = function(info) return self.db.profile.notesForRaidMembers end,
+                            order = 430
+                        }
+                    }
+                },
+                export = {
+                    order = 2,
+                    name = L["Import/Export"],
+                    type = "group",
+                    args = {
+                        headerExport = {
+                            order = 100,
+                            type = "header",
+                            name = L["Export"],
+                        },
+                        guildExportButton = {
+                            name = L["Notes Export"],
+                            desc = L["NotesExport_OptionDesc"],
+                            type = "execute",
+                            width = "normal",
+                            func = function()
+                                local optionsFrame = _G.InterfaceOptionsFrame
+                                optionsFrame:Hide()
+                                self:NotesExportHandler("")
+                            end,
+                            order = 110
+                        },
+                        headerImport = {
+                            order = 200,
+                            type = "header",
+                            name = L["Import"],
+                        },
+                        guildImportButton = {
+                            name = L["Notes Import"],
+                            desc = L["NotesImport_OptionDesc"],
+                            type = "execute",
+                            width = "normal",
+                            disabled = true,
+                            func = function()
+                                local optionsFrame = _G.InterfaceOptionsFrame
+                                optionsFrame:Hide()
+                                self:NotesImportHandler("")
+                            end,
+                            order = 210
+                        },
+                    }
+                }
+            }
+        }
+    end
+
+    return options
+end
+
+function PlayerNotes:ShowOptions()
+    _G.InterfaceOptionsFrame_OpenToCategory(self.optionsFrame.Main)
+end
+
+function PlayerNotes:OnInitialize()
+    -- Called when the addon is loaded
+    self.db = LibStub("AceDB-3.0"):New("PlayerNotesDB", defaults, "Default")
+    AddonData.configDb = self.db
+
+    NotesDB:OnInitialize(self)
+
+    -- Migrate the names for patch 5.4
+    self:RemoveSpacesFromRealm()
+
+    -- Build the table data for the Notes window
+    self:BuildTableData()
+
+    -- Register the options table
+    --LibStub("AceConfig-3.0"):RegisterOptionsTable("PlayerNotes", self:GetOptions())
+    --self.optionsFrame = LibStub("AceConfigDialog-3.0"):AddToBlizOptions(
+    --    "PlayerNotes", ADDON_NAME)
+
+    -- Register the options table
+    local displayName = _G.GetAddOnMetadata(ADDON_NAME, "Title")
+    local options = self:GetOptions()
+    LibStub("AceConfigRegistry-3.0"):RegisterOptionsTable(displayName, options)
+    self.optionsFrame = {}
+    local ACD = LibStub("AceConfigDialog-3.0")
+    self.optionsFrame.Main = ACD:AddToBlizOptions(displayName, displayName, nil, "core")
+    self.optionsFrame.Notes = ACD:AddToBlizOptions(displayName, L["Import/Export"], displayName, "export")
+
+    self:RegisterChatCommand("setnote", "SetNoteHandler")
+    self:RegisterChatCommand("delnote", "DelNoteHandler")
+    self:RegisterChatCommand("delrating", "DelRatingHandler")
+    self:RegisterChatCommand("getnote", "GetNoteHandler")
+    self:RegisterChatCommand("editnote", "EditNoteHandler")
+    self:RegisterChatCommand("notes", "NotesHandler")
+    self:RegisterChatCommand("notesoptions", "NotesOptionsHandler")
+    self:RegisterChatCommand("searchnote", "NotesHandler")
+    self:RegisterChatCommand("notesexport", "NotesExportHandler")
+    self:RegisterChatCommand("notesimport", "NotesImportHandler")
+    self:RegisterChatCommand("notesdbcheck", "NotesDBCheckHandler")
+
+    -- Create the LDB launcher
+    noteLDB = LDB:NewDataObject("PlayerNotes", {
+        type = "launcher",
+        icon = "Interface\\Icons\\INV_Misc_Note_06.blp",
+        OnClick = function(clickedframe, button)
+            if button == "RightButton" then
+                local optionsFrame = _G.InterfaceOptionsFrame
+
+                if optionsFrame:IsVisible() then
+                    optionsFrame:Hide()
+                else
+                    self:HideNotesWindow()
+                    self:ShowOptions()
+                end
+            elseif button == "LeftButton" then
+                if self:IsNotesVisible() then
+                    self:HideNotesWindow()
+                else
+                    local optionsFrame = _G.InterfaceOptionsFrame
+                    optionsFrame:Hide()
+                    self:NotesHandler("")
+                end
+            end
+        end,
+        OnTooltipShow = function(tooltip)
+            if tooltip and tooltip.AddLine then
+                tooltip:AddLine(GREEN .. L["Player Notes"] .. " " .. ADDON_VERSION)
+                tooltip:AddLine(YELLOW .. L["Left click"] .. " " .. WHITE
+                        .. L["to open/close the window"])
+                tooltip:AddLine(YELLOW .. L["Right click"] .. " " .. WHITE
+                        .. L["to open/close the configuration."])
+            end
+        end
+    })
+    icon:Register("PlayerNotesLDB", noteLDB, self.db.profile.minimap)
+
+    if not CharNoteTooltip then
+        self:CreateCharNoteTooltip()
+    end
+
+    -- Hook any new temporary windows
+    self:SecureHook("FCF_SetTemporaryWindowType")
+    self:SecureHook("FCF_Close")
+end
+
+function PlayerNotes:CreateCharNoteTooltip()
+    CharNoteTooltip = _G.CreateFrame("GameTooltip", "CharNoteTooltip", _G.UIParent, "GameTooltipTemplate")
+    CharNoteTooltip:SetOwner(_G.WorldFrame, "ANCHOR_NONE")
+    CharNoteTooltip:SetFrameStrata("DIALOG")
+    CharNoteTooltip:SetSize(100, 100)
+    CharNoteTooltip:SetPadding(16, 0)
+    if self.db.profile.remember_tooltip_pos == false or self.db.profile.tooltip_x == nil or self.db.profile.tooltip_y == nil then
+        CharNoteTooltip:SetPoint("TOPLEFT", "ChatFrame1", "TOPRIGHT", 20, 0)
+    else
+        CharNoteTooltip:SetPoint("CENTER", _G.UIParent, "CENTER", self.db.profile.tooltip_x, self.db.profile.tooltip_y)
+    end
+    CharNoteTooltip:EnableMouse(true)
+    CharNoteTooltip:SetToplevel(true)
+    CharNoteTooltip:SetMovable(true)
+    _G.GameTooltip_OnLoad(CharNoteTooltip)
+    CharNoteTooltip:SetUserPlaced(false)
+
+    CharNoteTooltip:RegisterForDrag("LeftButton")
+    CharNoteTooltip:SetScript("OnDragStart", function(self)
+        if not PlayerNotes.db.profile.lock_tooltip then
+            self:StartMoving()
+        end
+    end)
+    CharNoteTooltip:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        local scale = self:GetEffectiveScale() / _G.UIParent:GetEffectiveScale()
+        local x, y = self:GetCenter()
+        x, y = x * scale, y * scale
+        x = x - _G.GetScreenWidth() / 2
+        y = y - _G.GetScreenHeight() / 2
+        x = x / self:GetScale()
+        y = y / self:GetScale()
+        PlayerNotes.db.profile.tooltip_x, PlayerNotes.db.profile.tooltip_y = x, y
+        self:SetUserPlaced(false);
+    end)
+
+    local closebutton = _G.CreateFrame("Button", "CharNoteTooltipCloseButton", CharNoteTooltip)
+    closebutton:SetSize(32, 32)
+    closebutton:SetPoint("TOPRIGHT", 1, 0)
+
+    closebutton:SetNormalTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Up")
+    closebutton:SetPushedTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Down")
+    closebutton:SetHighlightTexture("Interface\\Buttons\\UI-Panel-MinimizeButton-Highlight", "ADD")
+
+    closebutton:SetScript("OnClick", function(self)
+        _G.HideUIPanel(CharNoteTooltip)
+    end)
+end
+
+function PlayerNotes:FCF_SetTemporaryWindowType(chatFrame, chatType, chatTarget)
+    if chatFrame and not self:IsHooked(chatFrame, "AddMessage") then
+        self:RawHook(chatFrame, "AddMessage", true)
+    end
+end
+
+function PlayerNotes:FCF_Close(frame, fallback)
+    if frame and self:IsHooked(frame, "AddMessage") then
+        self:Unhook(frame, "AddMessage")
+    end
+end
+
+function PlayerNotes:SetNoteHandler(input)
+    if input and #input > 0 then
+        local name, note = input:match("^(%S+) *(.*)")
+        name = NotesDB:FormatUnitName(name)
+        if note and #note > 0 then
+            NotesDB:SetNote(name, note)
+            if self.db.profile.verbose == true then
+                local strFormat = L["Set note for %s: %s"]
+                self:Print(strFormat:format(name, note))
+            end
+        else
+            self:Print(L["You must supply a note."])
+        end
+    end
+end
+
+function PlayerNotes:DelNoteHandler(input)
+    local name, note = nil, nil
+    if input and #input > 0 then
+        name, note = input:match("^(%S+) *(.*)")
+    else
+        if _G.UnitExists("target") and _G.UnitIsPlayer("target") then
+            local target = _G.GetUnitName("target", true)
+            if target and #target > 0 then
+                name = target
+            end
+        end
+    end
+
+    if name and #name > 0 then
+        name = NotesDB:FormatUnitName(name)
+        NotesDB:DeleteNote(name)
+        if self.db.profile.verbose == true then
+            local strFormat = L["Deleted note for %s"]
+            self:Print(strFormat:format(name))
+        end
+    end
+end
+
+function PlayerNotes:DelRatingHandler(input)
+    local name, note = nil, nil
+    if input and #input > 0 then
+        name, note = input:match("^(%S+) *(.*)")
+    else
+        if _G.UnitExists("target") and _G.UnitIsPlayer("target") then
+            local target = _G.GetUnitName("target", true)
+            if target and #target > 0 then
+                name = target
+            end
+        end
+    end
+
+    if name and #name > 0 then
+        name = NotesDB:FormatUnitName(name)
+        NotesDB:DeleteRating(name)
+        if self.db.profile.verbose == true then
+            local strFormat = L["Deleted rating for %s"]
+            self:Print(strFormat:format(name))
+        end
+    end
+end
+
+function PlayerNotes:UpdateNote(name, note)
+    local found = false
+    for i, v in ipairs(notesData) do
+        if v[NAME_COL] == name then
+            notesData[i][NOTE_COL] = note
+            found = true
+        end
+    end
+
+    if found == false then
+        tinsert(notesData, {
+            [RATING_COL] = (NotesDB:GetRating(name) or 0),
+            [NAME_COL] = name,
+            [NOTE_COL] = note
+        })
+    end
+
+    -- If the Notes window is shown then we need to update it
+    if notesFrame:IsVisible() then
+        notesFrame.table:SortData()
+    end
+end
+
+function PlayerNotes:UpdateRating(name, rating)
+    local found = false
+    for i, v in ipairs(notesData) do
+        if v[NAME_COL] == name then
+            notesData[i][RATING_COL] = rating
+            found = true
+        end
+    end
+
+    if found == false then
+        tinsert(notesData, {
+            [RATING_COL] = rating,
+            [NAME_COL] = name,
+            [NOTE_COL] = NotesDB:GetNote(name)
+        })
+    end
+
+    -- If the Notes window is shown then we need to update it
+    if notesFrame:IsVisible() then
+        notesFrame.table:SortData()
+    end
+end
+
+function PlayerNotes:RemoveNote(name)
+    for i, v in ipairs(notesData) do
+        if v[NAME_COL] == name then
+            tremove(notesData, i)
+        end
+    end
+
+    -- If the Notes window is shown then we need to update it
+    if notesFrame:IsVisible() then
+        notesFrame.table:SortData()
+    end
+end
+
+function PlayerNotes:RemoveRating(name)
+    for i, v in ipairs(notesData) do
+        if v[NAME_COL] == name then
+            if v[NOTE_COL] == nil then
+                tremove(notesData, i)
+            else
+                v[RATING_COL] = 0
+            end
+        end
+    end
+
+    -- If the Notes window is shown then we need to update it
+    if notesFrame:IsVisible() then
+        notesFrame.table:SortData()
+    end
+end
+
+function PlayerNotes:GetNoteHandler(input)
+    if input and #input > 0 then
+        local name, note = input:match("^(%S+) *(.*)")
+        name = NotesDB:FormatUnitName(name)
+
+        local note, rating, main, nameFound = NotesDB:GetInfoForNameOrMain(name)
+
+        if note then
+            if main and #main > 0 then
+                self:Print(chatNoteWithMainFormat:format(GetRatingColor(rating), name, nameFound, note or ""))
+            else
+                self:Print(chatNoteFormat:format(GetRatingColor(rating), nameFound, note or ""))
+            end
+        else
+            self:Print(L["No note found for "] .. name)
+        end
+    end
+end
+
+function PlayerNotes:NotesExportHandler(input)
+    self:ShowNotesExportFrame()
+end
+
+function PlayerNotes:NotesImportHandler(input)
+    self:ShowNotesImportFrame()
+end
+
+function PlayerNotes:UpdateMouseoverHighlighting(enabled)
+    if notesFrame and notesFrame.table then
+        local table = notesFrame.table
+        if enabled then
+            table:RegisterEvents(table.DefaultEvents)
+        else
+            table:RegisterEvents({
+                ["OnEnter"] = function(rowFrame, cellFrame, data, cols, row, realrow, column, table, ...)
+                    return true;
+                end,
+                ["OnLeave"] = function(rowFrame, cellFrame, data, cols, row, realrow, column, table, ...)
+                    return true;
+                end
+            })
+        end
+    end
+end
+
+local function escapeField(value, escapeChar)
+    local strFmt = "%s%s%s"
+    local doubleEscape = escapeChar .. escapeChar
+    if escapeChar and escapeChar ~= "" then
+        local escapedStr = value:gsub(escapeChar, doubleEscape)
+        return strFmt:format(escapeChar, escapedStr, escapeChar)
+    else
+        return value
+    end
+end
+
+local notesExportBuffer = {}
+function PlayerNotes:GenerateNotesExport()
+    local notesExportText = ""
+
+    local delimiter = ","
+    local fields = {}
+    local quote = ""
+    local rating
+    if self.db.profile.exportEscape == true then
+        quote = "\""
+    end
+
+    for name, note in pairs(self.db.realm.notes) do
+        wipe(fields)
+        if self.db.profile.exportUseName == true then
+            tinsert(fields, escapeField(name, quote))
+        end
+        if self.db.profile.exportUseNote == true then
+            tinsert(fields, escapeField(note, quote))
+        end
+        if self.db.profile.exportUseRating == true then
+            rating = (NotesDB:GetRating(name) or 0)
+            tinsert(fields, rating)
+        end
+
+        local line = tconcat(fields, delimiter)
+        tinsert(notesExportBuffer, line)
+    end
+
+    -- Add a blank line so a final new line is added
+    tinsert(notesExportBuffer, "")
+    notesExportText = tconcat(notesExportBuffer, "\n")
+    wipe(notesExportBuffer)
+    return notesExportText
+end
+
+local NotesImportFrame = nil
+function PlayerNotes:ShowNotesImportFrame()
+    if NotesImportFrame then return end
+
+    local frame = AGU:Create("Frame")
+    frame:SetTitle(L["Notes Import"])
+    frame:SetWidth(650)
+    frame:SetHeight(400)
+    frame:SetLayout("Flow")
+    frame:SetCallback("OnClose", function(widget)
+        widget:ReleaseChildren()
+        widget:Release()
+        NotesImportFrame = nil
+    end)
+
+    NotesImportFrame = frame
+
+    local multiline = AGU:Create("MultiLineEditBox")
+    multiline:SetLabel(L["NotesImport_ImportLabel"])
+    multiline:SetNumLines(10)
+    multiline:SetMaxLetters(0)
+    multiline:SetFullWidth(true)
+    multiline:DisableButton(true)
+    frame:AddChild(multiline)
+    frame.multiline = multiline
+
+    local spacer = AGU:Create("Label")
+    spacer:SetText(" ")
+    spacer:SetFullWidth(true)
+    frame:AddChild(spacer)
+
+    local importButton = AGU:Create("Button")
+    importButton:SetText(L["Import"])
+    importButton:SetCallback("OnClick",
+        function(widget)
+            PlayerNotes:ImportNotesFromText(NotesImportFrame.multiline:GetText())
+        end)
+    frame:AddChild(importButton)
+end
+
+function PlayerNotes:ImportNotesFromText(importData)
+end
+
+local NotesExportFrame = nil
+function PlayerNotes:ShowNotesExportFrame()
+    if NotesExportFrame then return end
+
+    local frame = AGU:Create("Frame")
+    frame:SetTitle(L["Notes Export"])
+    frame:SetWidth(650)
+    frame:SetHeight(400)
+    frame:SetLayout("Flow")
+    frame:SetCallback("OnClose", function(widget)
+        widget:ReleaseChildren()
+        widget:Release()
+        NotesExportFrame = nil
+    end)
+
+    NotesExportFrame = frame
+
+    local multiline = AGU:Create("MultiLineEditBox")
+    multiline:SetLabel(L["NotesExport_ExportLabel"])
+    multiline:SetNumLines(10)
+    multiline:SetMaxLetters(0)
+    multiline:SetFullWidth(true)
+    multiline:DisableButton(true)
+    frame:AddChild(multiline)
+    frame.multiline = multiline
+
+    local fieldsHeading = AGU:Create("Heading")
+    fieldsHeading:SetText("Fields to Export")
+    fieldsHeading:SetFullWidth(true)
+    frame:AddChild(fieldsHeading)
+
+    local nameOption = AGU:Create("CheckBox")
+    nameOption:SetLabel(L["Character Name"])
+    nameOption:SetCallback("OnValueChanged",
+        function(widget, event, value)
+            self.db.profile.exportUseName = value
+        end)
+    nameOption:SetValue(self.db.profile.exportUseName)
+    frame:AddChild(nameOption)
+
+    local noteOption = AGU:Create("CheckBox")
+    noteOption:SetLabel(L["Note"])
+    noteOption:SetCallback("OnValueChanged",
+        function(widget, event, value)
+            self.db.profile.exportUseNote = value
+        end)
+    noteOption:SetValue(self.db.profile.exportUseNote)
+    frame:AddChild(noteOption)
+
+    local ratingOption = AGU:Create("CheckBox")
+    ratingOption:SetLabel(L["Rating"])
+    ratingOption:SetCallback("OnValueChanged",
+        function(widget, event, value)
+            self.db.profile.exportUseRating = value
+        end)
+    ratingOption:SetValue(self.db.profile.exportUseRating)
+    frame:AddChild(ratingOption)
+
+    local optionsHeading = AGU:Create("Heading")
+    optionsHeading:SetText("Options")
+    optionsHeading:SetFullWidth(true)
+    frame:AddChild(optionsHeading)
+
+    local escapeOption = AGU:Create("CheckBox")
+    escapeOption:SetLabel(L["NotesExport_Escape"])
+    escapeOption:SetCallback("OnValueChanged",
+        function(widget, event, value)
+            self.db.profile.exportEscape = value
+        end)
+    escapeOption:SetValue(self.db.profile.exportEscape)
+    frame:AddChild(escapeOption)
+
+    local spacer = AGU:Create("Label")
+    spacer:SetText(" ")
+    spacer:SetFullWidth(true)
+    frame:AddChild(spacer)
+
+    local exportButton = AGU:Create("Button")
+    exportButton:SetText(L["Export"])
+    exportButton:SetCallback("OnClick",
+        function(widget)
+            local notesExportText = PlayerNotes:GenerateNotesExport(self.db.profile.exportUseName,
+                self.db.profile.exportUseNotes,
+                self.db.profile.exportUseRating)
+            frame.multiline:SetText(notesExportText)
+        end)
+    frame:AddChild(exportButton)
+end
+
+function PlayerNotes:CreateNotesFrame()
+    local noteswindow = _G.CreateFrame("Frame", "PlayerNotesWindow", _G.UIParent)
+    noteswindow:SetFrameStrata("DIALOG")
+    noteswindow:SetToplevel(true)
+    noteswindow:SetWidth(630)
+    noteswindow:SetHeight(430)
+    if self.db.profile.remember_main_pos then
+        noteswindow:SetPoint("CENTER", _G.UIParent, "CENTER",
+            self.db.profile.notes_window_x, self.db.profile.notes_window_y)
+    else
+        noteswindow:SetPoint("CENTER", _G.UIParent)
+    end
+    noteswindow:SetBackdrop({
+        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true,
+        tileSize = 32,
+        edgeSize = 32,
+        insets = { left = 11, right = 12, top = 12, bottom = 11 }
+    })
+
+    local ScrollingTable = LibStub("ScrollingTable");
+
+    local RATING_COL = 1
+    local NAME_COL = 2
+    local NOTE_COL = 3
+
+    local cols = {}
+    cols[RATING_COL] = {
+        ["name"] = L["RATING_COLUMN_NAME"],
+        ["width"] = 15,
+        ["colorargs"] = nil,
+        ["bgcolor"] = {
+            ["r"] = 0.0,
+            ["g"] = 0.0,
+            ["b"] = 0.0,
+            ["a"] = 1.0
+        },
+        ["sortnext"] = NAME_COL,
+        ["DoCellUpdate"] = function(rowFrame, cellFrame, data, cols, row, realrow, column, fShow, self, ...)
+            if fShow then
+                local image = GetRatingImage(data[realrow][RATING_COL])
+                if image and #image > 0 then
+                    cellFrame:SetBackdrop({ bgFile = image })
+                else
+                    cellFrame:SetBackdrop(nil)
+                end
+            end
+        end,
+    }
+    cols[NAME_COL] = {
+        ["name"] = L["Character Name"],
+        ["width"] = 150,
+        ["align"] = "LEFT",
+        ["color"] = function(data, cols, realrow, column, table)
+            return GetRatingColorObj(data[realrow][RATING_COL])
+        end,
+        ["colorargs"] = nil,
+        ["bgcolor"] = {
+            ["r"] = 0.0,
+            ["g"] = 0.0,
+            ["b"] = 0.0,
+            ["a"] = 1.0
+        },
+        ["defaultsort"] = "dsc",
+        ["sort"] = "dsc",
+        ["DoCellUpdate"] = nil,
+    }
+    cols[NOTE_COL] = {
+        ["name"] = L["Note"],
+        ["width"] = 400,
+        ["align"] = "LEFT",
+        ["color"] = {
+            ["r"] = 1.0,
+            ["g"] = 1.0,
+            ["b"] = 1.0,
+            ["a"] = 1.0
+        },
+        ["colorargs"] = nil,
+        ["bgcolor"] = {
+            ["r"] = 0.0,
+            ["g"] = 0.0,
+            ["b"] = 0.0,
+            ["a"] = 1.0
+        },
+        ["sortnext"] = NAME_COL,
+        ["DoCellUpdate"] = nil,
+    }
+
+    local table = ScrollingTable:CreateST(cols, 15, nil, nil, noteswindow);
+
+    local headertext = noteswindow:CreateFontString("PN_Notes_HeaderText", noteswindow, "GameFontNormalLarge")
+    headertext:SetPoint("TOP", noteswindow, "TOP", 0, -20)
+    headertext:SetText(L["Player Notes"])
+
+    local searchterm = _G.CreateFrame("EditBox", nil, noteswindow, "InputBoxTemplate")
+    searchterm:SetFontObject(_G.ChatFontNormal)
+    searchterm:SetWidth(300)
+    searchterm:SetHeight(35)
+    searchterm:SetPoint("TOPLEFT", noteswindow, "TOPLEFT", 25, -50)
+    searchterm:SetScript("OnShow", function(this) this:SetFocus() end)
+    searchterm:SetScript("OnEnterPressed", function(this) this:GetParent().table:SortData() end)
+    searchterm:SetScript("OnEscapePressed",
+        function(this)
+            this:SetText("")
+            this:GetParent():Hide()
+        end)
+
+    table.frame:SetPoint("TOP", searchterm, "BOTTOM", 0, -20)
+    table.frame:SetPoint("LEFT", noteswindow, "LEFT", 20, 0)
+
+    local searchbutton = _G.CreateFrame("Button", nil, noteswindow, "UIPanelButtonTemplate")
+    searchbutton:SetText(L["Search"])
+    searchbutton:SetWidth(100)
+    searchbutton:SetHeight(20)
+    searchbutton:SetPoint("LEFT", searchterm, "RIGHT", 10, 0)
+    searchbutton:SetScript("OnClick", function(this) this:GetParent().table:SortData() end)
+
+    local clearbutton = _G.CreateFrame("Button", nil, noteswindow, "UIPanelButtonTemplate")
+    clearbutton:SetText(L["Clear"])
+    clearbutton:SetWidth(100)
+    clearbutton:SetHeight(20)
+    clearbutton:SetPoint("LEFT", searchbutton, "RIGHT", 10, 0)
+    clearbutton:SetScript("OnClick",
+        function(this)
+            searchterm:SetText("")
+            this:GetParent().table:SortData()
+        end)
+
+    local closebutton = _G.CreateFrame("Button", nil, noteswindow, "UIPanelButtonTemplate")
+    closebutton:SetText(L["Close"])
+    closebutton:SetWidth(90)
+    closebutton:SetHeight(20)
+    closebutton:SetPoint("BOTTOM", noteswindow, "BOTTOM", 0, 20)
+    closebutton:SetScript("OnClick", function(this) this:GetParent():Hide(); end)
+
+    local deletebutton = _G.CreateFrame("Button", nil, noteswindow, "UIPanelButtonTemplate")
+    deletebutton:SetText(L["Delete"])
+    deletebutton:SetWidth(90)
+    deletebutton:SetHeight(20)
+    deletebutton:SetPoint("BOTTOM", noteswindow, "BOTTOM", 120, 70)
+    deletebutton:SetScript("OnClick",
+        function(this)
+            local frame = this:GetParent()
+            if frame.table:GetSelection() then
+                local row = frame.table:GetRow(frame.table:GetSelection())
+                if row and row[NAME_COL] and #row[NAME_COL] > 0 then
+                    confirmDeleteFrame.charname:SetText(row[NAME_COL])
+                    confirmDeleteFrame:Show()
+                    confirmDeleteFrame:Raise()
+                end
+            end
+        end)
+
+    local editbutton = _G.CreateFrame("Button", nil, noteswindow, "UIPanelButtonTemplate")
+    editbutton:SetText(L["Edit"])
+    editbutton:SetWidth(90)
+    editbutton:SetHeight(20)
+    editbutton:SetPoint("BOTTOM", noteswindow, "BOTTOM", 0, 70)
+    editbutton:SetScript("OnClick",
+        function(this)
+            local frame = this:GetParent()
+            if frame.table:GetSelection() then
+                local row = frame.table:GetRow(frame.table:GetSelection())
+                if row and row[NAME_COL] and #row[NAME_COL] > 0 then
+                    self:EditNoteHandler(row[NAME_COL])
+                end
+            end
+        end)
+
+    local addbutton = _G.CreateFrame("Button", nil, noteswindow, "UIPanelButtonTemplate")
+    addbutton:SetText(L["Add"])
+    addbutton:SetWidth(90)
+    addbutton:SetHeight(20)
+    addbutton:SetPoint("BOTTOM", noteswindow, "BOTTOM", -120, 70)
+    addbutton:SetScript("OnClick",
+        function(this)
+            self:AddNoteHandler()
+        end)
+
+    noteswindow.table = table
+    noteswindow.searchterm = searchterm
+
+    if self.db.profile.mouseoverHighlighting then
+        table:RegisterEvents(table.DefaultEvents)
+    else
+        table:RegisterEvents({
+            ["OnEnter"] = function(rowFrame, cellFrame, data, cols, row, realrow, column, table, ...)
+                return true;
+            end,
+            ["OnLeave"] = function(rowFrame, cellFrame, data, cols, row, realrow, column, table, ...)
+                return true;
+            end
+        })
+    end
+
+    table:EnableSelection(true)
+    table:SetData(notesData, true)
+    table:SetFilter(function(self, row)
+        local searchterm = searchterm:GetText():lower()
+        if searchterm and #searchterm > 0 then
+            local term = searchterm:lower()
+            if row[NAME_COL]:lower():find(term) or row[NOTE_COL]:lower():find(term) then
+                return true
+            end
+
+            return false
+        else
+            return true
+        end
+    end)
+
+    noteswindow.lock = self.db.profile.lock_main_window
+
+    noteswindow:SetMovable(true)
+    noteswindow:RegisterForDrag("LeftButton")
+    noteswindow:SetScript("OnDragStart",
+        function(self, button)
+            if not self.lock then
+                self:StartMoving()
+            end
+        end)
+    noteswindow:SetScript("OnDragStop",
+        function(self)
+            self:StopMovingOrSizing()
+            if PlayerNotes.db.profile.remember_main_pos then
+                local scale = self:GetEffectiveScale() / _G.UIParent:GetEffectiveScale()
+                local x, y = self:GetCenter()
+                x, y = x * scale, y * scale
+                x = x - _G.GetScreenWidth() / 2
+                y = y - _G.GetScreenHeight() / 2
+                x = x / self:GetScale()
+                y = y / self:GetScale()
+                PlayerNotes.db.profile.notes_window_x,
+                PlayerNotes.db.profile.notes_window_y = x, y
+                self:SetUserPlaced(false);
+            end
+        end)
+    noteswindow:EnableMouse(true)
+    noteswindow:Hide()
+    return noteswindow
+end
+
+function PlayerNotes:NotesHandler(input)
+    if input and #input > 0 then
+        if input == "help" then
+            print("Chat commands:")
+            print("--------------------------------")
+            print("/notes help - Shows this message")
+            print("/notes - Brings up the GUI")
+            print("/searchnote <searchterm> - Brings up the GUI. Optional search term allows filtering the list of notes.")
+            print("/setnote <charname[-realm]> <note> - Sets a note for the character name specified.")
+            print("/delnote <charname[-realm]> - Deletes the note for the character name specified.")
+            print("/getnote <charname[-realm]> - Prints the note for the character name specified.")
+            print("/editnote [charname[-realm]] - Brings up a window to edit the note for the name specified or your target if no name if specified.")
+            return
+        end
+        notesFrame.searchterm:SetText(input)
+    else
+        notesFrame.searchterm:SetText("")
+    end
+
+    notesFrame.table:SortData()
+    notesFrame:Show()
+    notesFrame:Raise()
+end
+
+local function splitWords(str)
+    local w = {}
+    local function helper(word) table.insert(w, word) return nil end
+
+    str:gsub("(%w+)", helper)
+    return w
+end
+
+function PlayerNotes:NotesOptionsHandler(input)
+    if input and #input > 0 then
+        local cmds = splitWords(input)
+        if cmds[1] and cmds[1] == "debug" then
+            if cmds[2] and cmds[2] == "on" then
+                self.db.profile.debug = true
+                self:Print("Debugging on.  Use '/notesoptions debug off' to disable.")
+            elseif cmds[2] and cmds[2] == "off" then
+                self.db.profile.debug = false
+                self:Print("Debugging off.")
+            else
+                self:Print("Debugging is " .. (self.db.profile.debug and "on." or "off."))
+            end
+        end
+    else
+        self:ShowOptions()
+    end
+end
+
+function PlayerNotes:NotesDBCheckHandler(input)
+    for name, note in pairs(self.db.realm.notes) do
+        if name then
+            if name ~= NotesDB:FormatUnitName(name) then
+                self:Print("Name " .. name .. " doesn't match the formatted name.")
+            end
+        else
+            self:Print("Found a note with a nil name value. [" .. note or "nil" .. "]")
+        end
+    end
+
+    self:Print("Note DB Check finished.")
+end
+
+function PlayerNotes:CreateConfirmDeleteFrame()
+    local deletewindow = _G.CreateFrame("Frame", "PlayerNotesConfirmDeleteWindow", _G.UIParent)
+    deletewindow:SetFrameStrata("DIALOG")
+    deletewindow:SetToplevel(true)
+    deletewindow:SetWidth(400)
+    deletewindow:SetHeight(200)
+    deletewindow:SetPoint("CENTER", _G.UIParent)
+    deletewindow:SetBackdrop({
+        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true,
+        tileSize = 32,
+        edgeSize = 32,
+        insets = { left = 11, right = 12, top = 12, bottom = 11 }
+    })
+    deletewindow:SetBackdropColor(0, 0, 0, 1)
+
+    local headertext = deletewindow:CreateFontString("CN_Confirm_HeaderText", deletewindow, "GameFontNormalLarge")
+    headertext:SetPoint("TOP", deletewindow, "TOP", 0, -20)
+    headertext:SetText(L["Delete Note"])
+
+    local warningtext = deletewindow:CreateFontString("CN_Confirm_WarningText", deletewindow, "GameFontNormalLarge")
+    warningtext:SetPoint("TOP", headertext, "TOP", 0, -40)
+    warningtext:SetText(L["Are you sure you wish to delete the note for:"])
+
+    local charname = deletewindow:CreateFontString("CN_Confirm_CharName", deletewindow, "GameFontNormal")
+    charname:SetPoint("BOTTOM", warningtext, "BOTTOM", 0, -40)
+    charname:SetFont(charname:GetFont(), 14)
+    charname:SetTextColor(1.0, 1.0, 1.0, 1)
+
+    local deletebutton = _G.CreateFrame("Button", nil, deletewindow, "UIPanelButtonTemplate")
+    deletebutton:SetText(L["Delete"])
+    deletebutton:SetWidth(100)
+    deletebutton:SetHeight(20)
+    deletebutton:SetPoint("BOTTOM", deletewindow, "BOTTOM", -60, 20)
+    deletebutton:SetScript("OnClick",
+        function(this)
+            NotesDB:DeleteNote(charname:GetText())
+            this:GetParent():Hide()
+            if this:GetParent().parentFrame then
+                this:GetParent().parentFrame:Hide()
+            end
+        end)
+
+    local cancelbutton = _G.CreateFrame("Button", nil, deletewindow, "UIPanelButtonTemplate")
+    cancelbutton:SetText(L["Cancel"])
+    cancelbutton:SetWidth(100)
+    cancelbutton:SetHeight(20)
+    cancelbutton:SetPoint("BOTTOM", deletewindow, "BOTTOM", 60, 20)
+    cancelbutton:SetScript("OnClick", function(this) this:GetParent():Hide(); end)
+
+    deletewindow.charname = charname
+    deletewindow.parentFrame = nil
+
+    deletewindow:SetMovable(true)
+    deletewindow:RegisterForDrag("LeftButton")
+    deletewindow:SetScript("OnDragStart",
+        function(this, button)
+            this:StartMoving()
+        end)
+    deletewindow:SetScript("OnDragStop",
+        function(this)
+            this:StopMovingOrSizing()
+        end)
+    deletewindow:EnableMouse(true)
+
+    deletewindow:Hide()
+
+    return deletewindow
+end
+
+function PlayerNotes:CreateEditNoteFrame()
+    local editwindow = _G.CreateFrame("Frame", "PlayerNotesEditWindow", _G.UIParent)
+    editwindow:SetFrameStrata("DIALOG")
+    editwindow:SetToplevel(true)
+    editwindow:SetWidth(400)
+    editwindow:SetHeight(280)
+    editwindow:SetPoint("CENTER", _G.UIParent)
+    editwindow:SetBackdrop({
+        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true,
+        tileSize = 32,
+        edgeSize = 32,
+        insets = { left = 11, right = 12, top = 12, bottom = 11 }
+    })
+    editwindow:SetBackdropColor(0, 0, 0, 1)
+
+    local savebutton = _G.CreateFrame("Button", nil, editwindow, "UIPanelButtonTemplate")
+    savebutton:SetText(L["Save"])
+    savebutton:SetWidth(100)
+    savebutton:SetHeight(20)
+    savebutton:SetPoint("BOTTOM", editwindow, "BOTTOM", -120, 20)
+    savebutton:SetScript("OnClick",
+        function(this)
+            local frame = this:GetParent()
+            local rating = _G.UIDropDownMenu_GetSelectedValue(editwindow.ratingDropdown)
+            self:SaveEditNote(frame.charname:GetText(), frame.editbox:GetText(), rating)
+            frame:Hide()
+        end)
+
+    local removebutton = _G.CreateFrame("Button", nil, editwindow, "UIPanelButtonTemplate")
+    removebutton:SetText(L["Remove"])
+    removebutton:SetWidth(100)
+    removebutton:SetHeight(20)
+    removebutton:SetPoint("BOTTOM", editwindow, "BOTTOM", 0, 20)
+    removebutton:SetScript("OnClick",
+        function(this)
+            local frame = this:GetParent()
+            confirmDeleteFrame.charname:SetText(frame.charname:GetText())
+            confirmDeleteFrame.parentFrame = frame
+            confirmDeleteFrame:Show()
+            confirmDeleteFrame:Raise()
+        end)
+
+    local cancelbutton = _G.CreateFrame("Button", nil, editwindow, "UIPanelButtonTemplate")
+    cancelbutton:SetText(L["Cancel"])
+    cancelbutton:SetWidth(100)
+    cancelbutton:SetHeight(20)
+    cancelbutton:SetPoint("BOTTOM", editwindow, "BOTTOM", 120, 20)
+    cancelbutton:SetScript("OnClick", function(this) this:GetParent():Hide(); end)
+
+    local headertext = editwindow:CreateFontString("CN_HeaderText", editwindow, "GameFontNormalLarge")
+    headertext:SetPoint("TOP", editwindow, "TOP", 0, -20)
+    headertext:SetText(L["Edit Note"])
+
+    local charname = editwindow:CreateFontString("CN_CharName", editwindow, "GameFontNormal")
+    charname:SetPoint("BOTTOM", headertext, "BOTTOM", 0, -40)
+    charname:SetFont(charname:GetFont(), 14)
+    charname:SetTextColor(1.0, 1.0, 1.0, 1)
+
+    local ratingLabel = editwindow:CreateFontString("CN_RatingLabel", editwindow, "GameFontNormal")
+    ratingLabel:SetPoint("TOP", charname, "BOTTOM", 0, -30)
+    ratingLabel:SetPoint("LEFT", editwindow, "LEFT", 20, 0)
+    ratingLabel:SetTextColor(1.0, 1.0, 1.0, 1)
+    ratingLabel:SetText(L["Rating"] .. ":")
+
+    local ratingDropdown = _G.CreateFrame("Button", "CN_RatingDropDown", editwindow, "UIDropDownMenuTemplate")
+    ratingDropdown:ClearAllPoints()
+    ratingDropdown:SetPoint("TOPLEFT", ratingLabel, "TOPRIGHT", 7, 5)
+    ratingDropdown:Show()
+    _G.UIDropDownMenu_Initialize(ratingDropdown, function(self, level)
+        local info = nil
+        for i = -1, 1 do
+            info = _G.UIDropDownMenu_CreateInfo()
+            local ratingInfo = RATING_OPTIONS[i]
+            info.text = ratingInfo[1]
+            info.value = i
+            info.colorCode = ratingInfo[2]
+            info.func = function(self)
+                _G.UIDropDownMenu_SetSelectedValue(ratingDropdown, self.value)
+            end
+            _G.UIDropDownMenu_AddButton(info, level)
+        end
+    end)
+    _G.UIDropDownMenu_SetWidth(ratingDropdown, 100);
+    _G.UIDropDownMenu_SetButtonWidth(ratingDropdown, 124)
+    _G.UIDropDownMenu_SetSelectedValue(ratingDropdown, 0)
+    _G.UIDropDownMenu_JustifyText(ratingDropdown, "LEFT")
+
+    local editBoxContainer = _G.CreateFrame("Frame", nil, editwindow)
+    editBoxContainer:SetPoint("TOPLEFT", editwindow, "TOPLEFT", 20, -150)
+    editBoxContainer:SetPoint("BOTTOMRIGHT", editwindow, "BOTTOMRIGHT", -40, 50)
+    editBoxContainer:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 16,
+        edgeSize = 16,
+        insets = { left = 4, right = 3, top = 4, bottom = 3 }
+    })
+    editBoxContainer:SetBackdropColor(0, 0, 0, 0.9)
+
+    local scrollArea = _G.CreateFrame("ScrollFrame", "CN_EditNote_EditScroll", editwindow, "UIPanelScrollFrameTemplate")
+    scrollArea:SetPoint("TOPLEFT", editBoxContainer, "TOPLEFT", 6, -6)
+    scrollArea:SetPoint("BOTTOMRIGHT", editBoxContainer, "BOTTOMRIGHT", -6, 6)
+
+    local editbox = _G.CreateFrame("EditBox", "CN_EditNote_EditBox", editwindow)
+    editbox:SetFontObject(_G.ChatFontNormal)
+    editbox:SetMultiLine(true)
+    editbox:SetAutoFocus(true)
+    editbox:SetWidth(300)
+    editbox:SetHeight(5 * 14)
+    editbox:SetMaxLetters(0)
+    editbox:SetScript("OnShow", function(this) editbox:SetFocus() end)
+    editbox:SetScript("OnTextChanged",
+        function(this)
+            local text = editbox:GetText():gsub("%s*", "")
+            if text == "" then
+                savebutton:Disable()
+            else
+                savebutton:Enable()
+            end
+        end
+    )
+
+    if not self.db.profile.multilineNotes then
+        editbox:SetScript("OnEnterPressed",
+            function(this)
+                local frame = this:GetParent():GetParent()
+                local rating = _G.UIDropDownMenu_GetSelectedValue(editwindow.ratingDropdown)
+                self:SaveEditNote(frame.charname:GetText(), frame.editbox:GetText(), rating)
+                frame:Hide()
+            end)
+    end
+
+    editbox:SetScript("OnEscapePressed",
+        function(this)
+            this:SetText("")
+            this:GetParent():GetParent():Hide()
+        end)
+    editbox.scrollArea = scrollArea
+    editbox:SetScript("OnCursorChanged", function(self, _, y, _, cursorHeight)
+        self, y = self.scrollArea, -y
+        local offset = self:GetVerticalScroll()
+        if y < offset then
+            self:SetVerticalScroll(y)
+        else
+            y = y + cursorHeight - self:GetHeight()
+            if y > offset then
+                self:SetVerticalScroll(y)
+            end
+        end
+    end)
+    scrollArea:SetScrollChild(editbox)
+
+    editwindow.charname = charname
+    editwindow.editbox = editbox
+    editwindow.ratingDropdown = ratingDropdown
+    editwindow.removeButton = removebutton
+    editwindow.saveButton = savebutton
+
+    editwindow:SetMovable(true)
+    editwindow:RegisterForDrag("LeftButton")
+    editwindow:SetScript("OnDragStart",
+        function(this, button)
+            this:StartMoving()
+        end)
+    editwindow:SetScript("OnDragStop",
+        function(this)
+            this:StopMovingOrSizing()
+        end)
+    editwindow:EnableMouse(true)
+
+    editwindow:Hide()
+
+    return editwindow
+end
+
+function PlayerNotes:CreateAddNoteFrame()
+    local addwindow = _G.CreateFrame("Frame", "PlayerNotesAddWindow", _G.UIParent)
+    addwindow:SetFrameStrata("DIALOG")
+    addwindow:SetToplevel(true)
+    addwindow:SetWidth(400)
+    addwindow:SetHeight(280)
+    addwindow:SetPoint("CENTER", _G.UIParent)
+    addwindow:SetBackdrop({
+        bgFile = "Interface\\ChatFrame\\ChatFrameBackground",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true,
+        tileSize = 32,
+        edgeSize = 32,
+        insets = { left = 11, right = 12, top = 12, bottom = 11 }
+    })
+    addwindow:SetBackdropColor(0, 0, 0, 1)
+
+    local savebutton = _G.CreateFrame("Button", nil, addwindow, "UIPanelButtonTemplate")
+    savebutton:SetText(L["Save"])
+    savebutton:SetWidth(100)
+    savebutton:SetHeight(20)
+    savebutton:SetPoint("BOTTOM", addwindow, "BOTTOM", -60, 20)
+    savebutton:SetScript("OnClick",
+        function(this)
+            local frame = this:GetParent()
+            local rating = _G.UIDropDownMenu_GetSelectedValue(addwindow.ratingDropdown)
+            self:SaveEditNote(frame.charname:GetText(), frame.editbox:GetText(), rating)
+
+            if notesFrame:IsVisible() then
+                notesFrame.table:SortData()
+            end
+
+            frame:Hide()
+        end)
+
+    local cancelbutton = _G.CreateFrame("Button", nil, addwindow, "UIPanelButtonTemplate")
+    cancelbutton:SetText(L["Cancel"])
+    cancelbutton:SetWidth(100)
+    cancelbutton:SetHeight(20)
+    cancelbutton:SetPoint("BOTTOM", addwindow, "BOTTOM", 60, 20)
+    cancelbutton:SetScript("OnClick", function(this) this:GetParent():Hide(); end)
+
+    local headertext = addwindow:CreateFontString("CN_HeaderText", addwindow, "GameFontNormalLarge")
+    headertext:SetPoint("TOP", addwindow, "TOP", 0, -20)
+    headertext:SetText(L["Add Note"])
+
+    local nameLabel = addwindow:CreateFontString("CN_CharNameLabel", addwindow, "GameFontNormal")
+    nameLabel:SetPoint("TOP", headertext, "BOTTOM", 0, -30)
+    nameLabel:SetPoint("LEFT", addwindow, "LEFT", 20, 0)
+    nameLabel:SetTextColor(1.0, 1.0, 1.0, 1)
+    nameLabel:SetText(L["Player name"] .. ":")
+
+    local charname = _G.CreateFrame("EditBox", nil, addwindow, "InputBoxTemplate")
+    charname:SetFontObject(_G.ChatFontNormal)
+    charname:SetWidth(200)
+    charname:SetHeight(35)
+    charname:SetPoint("TOPLEFT", nameLabel, "TOPRIGHT", 20, 11)
+    charname:SetScript("OnShow", function(this) this:SetFocus() end)
+    charname:SetScript("OnEnterPressed", function(this) this:GetParent().table:SortData() end)
+    charname:SetScript("OnEscapePressed",
+        function(this)
+            this:SetText("")
+            this:GetParent():Hide()
+        end)
+
+    local ratingLabel = addwindow:CreateFontString("CN_RatingLabel", addwindow, "GameFontNormal")
+    ratingLabel:SetPoint("TOP", charname, "BOTTOM", 0, -20)
+    ratingLabel:SetPoint("LEFT", addwindow, "LEFT", 20, 0)
+    ratingLabel:SetTextColor(1.0, 1.0, 1.0, 1)
+    ratingLabel:SetText(L["Rating"] .. ":")
+
+    local ratingDropdown = _G.CreateFrame("Button", "CN_RatingDropDown", addwindow, "UIDropDownMenuTemplate")
+    ratingDropdown:ClearAllPoints()
+    ratingDropdown:SetPoint("TOPLEFT", ratingLabel, "TOPRIGHT", 20, 6)
+    ratingDropdown:Show()
+    _G.UIDropDownMenu_Initialize(ratingDropdown, function(self, level)
+        local info = nil
+        for i = -1, 1 do
+            info = _G.UIDropDownMenu_CreateInfo()
+            local ratingInfo = RATING_OPTIONS[i]
+            info.text = ratingInfo[1]
+            info.value = i
+            info.colorCode = ratingInfo[2]
+            info.func = function(self)
+                _G.UIDropDownMenu_SetSelectedValue(ratingDropdown, self.value)
+            end
+            _G.UIDropDownMenu_AddButton(info, level)
+        end
+    end)
+    _G.UIDropDownMenu_SetWidth(ratingDropdown, 100);
+    _G.UIDropDownMenu_SetButtonWidth(ratingDropdown, 124)
+    _G.UIDropDownMenu_SetSelectedValue(ratingDropdown, 0)
+    _G.UIDropDownMenu_JustifyText(ratingDropdown, "LEFT")
+
+    local editBoxContainer = _G.CreateFrame("Frame", nil, addwindow)
+    editBoxContainer:SetPoint("TOPLEFT", addwindow, "TOPLEFT", 20, -150)
+    editBoxContainer:SetPoint("BOTTOMRIGHT", addwindow, "BOTTOMRIGHT", -40, 50)
+    editBoxContainer:SetBackdrop({
+        bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 16,
+        edgeSize = 16,
+        insets = { left = 4, right = 3, top = 4, bottom = 3 }
+    })
+    editBoxContainer:SetBackdropColor(0, 0, 0, 0.9)
+
+    local scrollArea = _G.CreateFrame("ScrollFrame", "CN_EditNote_EditScroll", addwindow, "UIPanelScrollFrameTemplate")
+    scrollArea:SetPoint("TOPLEFT", editBoxContainer, "TOPLEFT", 6, -6)
+    scrollArea:SetPoint("BOTTOMRIGHT", editBoxContainer, "BOTTOMRIGHT", -6, 6)
+
+    local editbox = _G.CreateFrame("EditBox", "CN_EditNote_EditBox", addwindow)
+    editbox:SetFontObject(_G.ChatFontNormal)
+    editbox:SetMultiLine(true)
+    editbox:SetAutoFocus(true)
+    editbox:SetWidth(300)
+    editbox:SetHeight(5 * 14)
+    editbox:SetMaxLetters(0)
+    editbox:SetScript("OnTextChanged",
+        function(this)
+            local text = editbox:GetText():gsub("%s*", "")
+            local name = charname:GetText():gsub("%s*", "")
+            if text == "" or name == "" then
+                savebutton:Disable()
+            else
+                savebutton:Enable()
+            end
+        end
+    )
+
+    charname:SetScript("OnTextChanged",
+        function(this)
+            local text = editbox:GetText():gsub("%s*", "")
+            local name = charname:GetText():gsub("%s*", "")
+            if text == "" or name == "" then
+                savebutton:Disable()
+            else
+                savebutton:Enable()
+            end
+        end
+    )
+
+    if not self.db.profile.multilineNotes then
+        editbox:SetScript("OnEnterPressed",
+            function(this)
+                local frame = this:GetParent():GetParent()
+                local rating = _G.UIDropDownMenu_GetSelectedValue(addwindow.ratingDropdown)
+                self:SaveEditNote(frame.charname:GetText(), frame.editbox:GetText(), rating)
+                frame:Hide()
+            end)
+    end
+
+    editbox:SetScript("OnEscapePressed",
+        function(this)
+            this:SetText("")
+            this:GetParent():GetParent():Hide()
+        end)
+    editbox.scrollArea = scrollArea
+    editbox:SetScript("OnCursorChanged", function(self, _, y, _, cursorHeight)
+        self, y = self.scrollArea, -y
+        local offset = self:GetVerticalScroll()
+        if y < offset then
+            self:SetVerticalScroll(y)
+        else
+            y = y + cursorHeight - self:GetHeight()
+            if y > offset then
+                self:SetVerticalScroll(y)
+            end
+        end
+    end)
+    scrollArea:SetScrollChild(editbox)
+
+    addwindow.charname = charname
+    addwindow.editbox = editbox
+    addwindow.ratingDropdown = ratingDropdown
+
+    addwindow:SetMovable(true)
+    addwindow:RegisterForDrag("LeftButton")
+    addwindow:SetScript("OnDragStart",
+        function(this, button)
+            this:StartMoving()
+        end)
+    addwindow:SetScript("OnDragStop",
+        function(this)
+            this:StopMovingOrSizing()
+        end)
+    addwindow:EnableMouse(true)
+
+    addwindow:Hide()
+
+    return addwindow
+end
+
+local EditNoteFrame = nil
+function PlayerNotes:ShowEditNoteFrame(name, note)
+    if EditNoteFrame then return end
+
+    local frame = AGU:Create("Frame")
+    frame:SetTitle(L["Edit Note"])
+    frame:SetWidth(400)
+    frame:SetHeight(250)
+    frame:SetLayout("Flow")
+    frame:SetCallback("OnClose", function(widget)
+        widget:ReleaseChildren()
+        widget:Release()
+        EditNoteFrame = nil
+    end)
+    EditNoteFrame = frame
+
+    local text = AGU:Create("Label")
+    text:SetText(name)
+    text:SetFont(_G.GameFontNormalLarge:GetFont())
+    text.label:SetJustifyH("CENTER")
+    text:SetFullWidth(true)
+    text:SetCallback("OnRelease",
+        function(widget)
+            widget.label:SetJustifyH("LEFT")
+        end)
+    frame:AddChild(text)
+
+    local spacer = AGU:Create("Label")
+    spacer:SetFullWidth(true)
+    spacer:SetText(" ")
+    frame:AddChild(spacer)
+
+    local editbox = AGU:Create("MultiLineEditBox")
+    editbox:SetFullWidth(true)
+    editbox:SetText(note)
+    editbox:SetLabel(L["Note"])
+    editbox:SetNumLines(5)
+    editbox:SetMaxLetters(0)
+    editbox:SetFocus()
+    editbox.editBox:HighlightText()
+    editbox:SetCallback("OnEnterPressed", function(widget, event, noteText)
+        PlayerNotes:SaveEditNote(name, noteText)
+    end)
+    frame:AddChild(editbox)
+end
+
+function PlayerNotes:EditNoteHandler(input)
+    local name = nil
+    if input and #input > 0 then
+        name = input
+    else
+        if _G.UnitExists("target") and _G.UnitIsPlayer("target") then
+            local target = _G.GetUnitName("target", true)
+            if target and #target > 0 then
+                name = target
+            end
+        end
+    end
+
+    if name and #name > 0 then
+        local playerName, realm, unit = GetNameAndRealm(name)
+        name = NotesDB:FormatUnitName(playerName .. "-" .. realm)
+
+        local charNote, nameFound = NotesDB:GetNote(name)
+        local rating = NotesDB:GetRating(nameFound) or 0
+
+        local editwindow = editNoteFrame
+        editwindow.charname:SetText(charNote and nameFound or name)
+        editwindow.editbox:SetText(charNote or "")
+
+        if not charNote then
+            editwindow.removeButton:Disable()
+        else
+            editwindow.removeButton:Enable()
+        end
+
+        editwindow:Show()
+        editwindow:Raise()
+
+        _G.UIDropDownMenu_SetSelectedValue(editwindow.ratingDropdown, rating)
+        local ratingInfo = RATING_OPTIONS[rating]
+        if ratingInfo and ratingInfo[1] and ratingInfo[2] then
+            _G.UIDropDownMenu_SetText(editwindow.ratingDropdown, ratingInfo[2] .. ratingInfo[1] .. "|r")
+        end
+    end
+end
+
+function PlayerNotes:AddNoteHandler()
+    local addwindow = addNoteFrame
+    local rating = 0
+
+    addwindow.charname:SetText("")
+    addwindow.editbox:SetText("")
+
+    addwindow:Show()
+    addwindow:Raise()
+
+    _G.UIDropDownMenu_SetSelectedValue(addwindow.ratingDropdown, rating)
+    local ratingInfo = RATING_OPTIONS[rating]
+    if ratingInfo and ratingInfo[1] and ratingInfo[2] then
+        _G.UIDropDownMenu_SetText(addwindow.ratingDropdown, ratingInfo[2] .. ratingInfo[1] .. "|r")
+    end
+end
+
+function PlayerNotes:SaveEditNote(name, note, rating)
+    if name and #name > 0 and note and #note > 0 then
+        NotesDB:SetNote(name, note)
+
+        if rating then
+            NotesDB:SetRating(name, rating)
+        end
+    end
+
+    local editwindow = editNoteFrame
+
+    editwindow.charname:SetText("")
+    editwindow.editbox:SetText("")
+end
+
+function PlayerNotes:OnEnable()
+    NotesDB:OnEnable()
+
+    -- Register to receive the chat messages to watch for logons and who requests
+    self:RegisterEvent("CHAT_MSG_SYSTEM")
+
+    -- Register for party and raid roster updates
+    self:RegisterEvent("GROUP_ROSTER_UPDATE")
+    self:RegisterEvent("ADDON_LOADED")
+
+    -- Create the Notes frame for later use
+    notesFrame = self:CreateNotesFrame()
+
+    -- Create the Edit Note frame to use later
+    editNoteFrame = self:CreateEditNoteFrame()
+    addNoteFrame = self:CreateAddNoteFrame()
+
+    -- Create the Confirm Delete frame for later use
+    confirmDeleteFrame = self:CreateConfirmDeleteFrame()
+
+    -- Add the Edit Note menu item on unit frames
+    self:AddToUnitPopupMenu()
+
+    -- Enable note links
+    self:EnableNoteLinks()
+
+    playerName = _G.GetUnitName("player", true)
+end
+
+function PlayerNotes:EnableNoteLinks()
+    if self.db.profile.noteLinksInChat then
+        -- Hook SetItemRef to create our own hyperlinks
+        if not self:IsHooked(nil, "SetItemRef") then
+            self:RawHook(nil, "SetItemRef", true)
+        end
+        -- Hook SetHyperlink so we can redirect charnote links
+        if not self:IsHooked(_G.ItemRefTooltip, "SetHyperlink") then
+            self:RawHook(_G.ItemRefTooltip, "SetHyperlink", true)
+        end
+        -- Hook chat frames so we can edit the messages
+        self:HookChatFrames()
+    end
+end
+
+function PlayerNotes:DisableNoteLinks()
+    self:Unhook(nil, "SetItemRef")
+    self:Unhook(_G.ItemRefTooltip, "SetHyperlink")
+    self:UnhookChatFrames()
+end
+
+function PlayerNotes:OnDisable()
+    -- Called when the addon is disabled
+    self:UnregisterEvent("CHAT_MSG_SYSTEM")
+    self:UnregisterEvent("GROUP_ROSTER_UPDATE")
+
+    -- Remove the menu items
+    self:RemoveFromUnitPopupMenu()
+end
+
+function PlayerNotes:SetItemRef(link, text, button, ...)
+    if link and link:match("^charnote:") then
+        local name = sub(link, 10)
+        name = NotesDB:FormatUnitName(name)
+        local note, nameFound = NotesDB:GetNote(name)
+        -- Display a link
+        _G.ShowUIPanel(CharNoteTooltip)
+        if (not CharNoteTooltip:IsVisible()) then
+            CharNoteTooltip:SetOwner(_G.UIParent, "ANCHOR_PRESERVE")
+        end
+        CharNoteTooltip:ClearLines()
+        CharNoteTooltip:AddLine(nameFound, 1, 1, 0)
+        CharNoteTooltip:AddLine(note or "", 1, 1, 1, true)
+        CharNoteTooltip:SetBackdropBorderColor(1, 1, 1, 1)
+        CharNoteTooltip:Show()
+        return nil
+    end
+    return self.hooks.SetItemRef(link, text, button, ...)
+end
+
+function PlayerNotes:SetHyperlink(frame, link, ...)
+    if link and link:match("^charnote:") then return end
+    return self.hooks[frame].SetHyperlink(frame, link, ...)
+end
+
+function PlayerNotes:AddToUnitPopupMenu()
+    _G.UnitPopupButtons["CN_EDIT_NOTE"] = { text = L["Edit Note"] }
+
+    for menu, enabled in pairs(self.db.profile.menusToModify) do
+        if menu and enabled then
+            tinsert(_G.UnitPopupMenus[menu],
+                #_G.UnitPopupMenus[menu],
+                "CN_EDIT_NOTE")
+        end
+    end
+
+    self:SecureHook("UnitPopup_ShowMenu")
+end
+
+function PlayerNotes:RemoveFromUnitPopupMenu()
+    self:Unhook("UnitPopup_ShowMenu")
+
+    for menu in pairs(_G.UnitPopupMenus) do
+        for i = #_G.UnitPopupMenus[menu], 1, -1 do
+            if _G.UnitPopupMenus[menu][i] == "CN_EDIT_NOTE" then
+                tremove(_G.UnitPopupMenus[menu], i)
+                break
+            end
+        end
+    end
+
+    _G.UnitPopupButtons["CN_EDIT_NOTE"] = nil
+end
+
+function PlayerNotes:UnitPopup_ShowMenu(dropdownMenu, which, unit, name, userData, ...)
+    for i = 1, _G.UIDROPDOWNMENU_MAXBUTTONS do
+        local button = _G["DropDownList" .. _G.UIDROPDOWNMENU_MENU_LEVEL .. "Button" .. i]
+        if button.value == "CN_EDIT_NOTE" then
+            button.arg1 = dropdownMenu
+            button.arg2 = which
+            button.func = PlayerNotes.EditNoteMenuClick
+        end
+    end
+end
+
+function PlayerNotes:EditNoteMenuClick(dropdownMenu, which)
+    local menu = _G.UIDROPDOWNMENU_INIT_MENU
+    local name, realm, unit, playerRealm
+
+    if which == "BN_FRIEND" and menu.accountInfo and menu.accountInfo.bnetAccountID then
+        name, playerRealm = GetNameRealmForBNetFriend(menu.accountInfo.bnetAccountID)
+    else
+        name, realm, unit = GetNameAndRealm(menu.name)
+        playerRealm = menu.server or realm
+    end
+
+    local fullname = NotesDB:FormatNameWithRealm(name, playerRealm)
+    if not fullname then
+        print("Player not found/not logged in.")
+        return
+    end
+
+    if PlayerNotes.db.profile.debug then
+        local strFormat = "Menu Click: %s - %s -> %s"
+        PlayerNotes:Print(strFormat:format(_G.tostring(name), _G.tostring(playerRealm),
+            _G.tostring(fullname)))
+    end
+    PlayerNotes:EditNoteHandler(fullname)
+end
+
+function PlayerNotes:IsNotesVisible()
+    if notesFrame then
+        return notesFrame:IsVisible()
+    end
+end
+
+function PlayerNotes:HideNotesWindow()
+    if notesFrame then
+        notesFrame:Hide()
+    end
+end
+
+function PlayerNotes:BuildTableData()
+    local key, value = nil, nil
+    for key, value in pairs(self.db.realm.notes) do
+        tinsert(notesData, {
+            [RATING_COL] = (NotesDB:GetRating(key) or 0),
+            [NAME_COL] = key,
+            [NOTE_COL] = value
+        })
+    end
+end
+
+function PlayerNotes:GetFriendNote(friendName)
+    local numFriends = C_FriendList.GetNumFriends()
+    if numFriends > 0 then
+        for i = 1, numFriends do
+            local name, level, class, area, connected, status, note =
+            C_FriendList.GetFriendInfoByIndex(i)
+            if friendName == name then
+                return note
+            end
+        end
+    end
+
+    return ""
+end
+
+function PlayerNotes:DisplayNote(name, type)
+    local main
+    name = NotesDB:FormatUnitName(name)
+
+    local note, rating, main, nameFound = NotesDB:GetInfoForNameOrMain(name)
+    if note then
+        if main and #main > 0 then
+            self:Print(chatNoteWithMainFormat:format(GetRatingColor(rating), name, nameFound, note))
+        else
+            self:Print(chatNoteFormat:format(GetRatingColor(rating), nameFound, note))
+        end
+    end
+end
+
+function PlayerNotes:HookChatFrames()
+    for i = 1, _G.NUM_CHAT_WINDOWS do
+        local chatFrame = _G["ChatFrame" .. i]
+        if chatFrame ~= _G.COMBATLOG then
+            if not self:IsHooked(chatFrame, "AddMessage") then
+                self:RawHook(chatFrame, "AddMessage", true)
+            end
+        end
+    end
+end
+
+function PlayerNotes:UnhookChatFrames()
+    for i = 1, _G.NUM_CHAT_WINDOWS do
+        local chatFrame = _G["ChatFrame" .. i]
+        if chatFrame ~= _G.COMBATLOG then
+            self:Unhook(chatFrame, "AddMessage")
+        end
+    end
+end
+
+local noteLinkFmt = "%s|Hcharnote:%s|h[%s]|h|r"
+function PlayerNotes:CreateNoteLink(name, text)
+    local rating = self.db.realm.ratings[name]
+    return noteLinkFmt:format(GetRatingColor(rating), name, text)
+end
+
+local function AddNoteForChat(message, name)
+    if name and #name > 0 then
+        local note, nameFound = NotesDB:GetNote(name)
+        if note and #note > 0 then
+            local messageFmt = "%s %s"
+            return messageFmt:format(message, PlayerNotes:CreateNoteLink(nameFound, "note"))
+        end
+    end
+
+    return message
+end
+
+function PlayerNotes:AddMessage(frame, text, r, g, b, id, ...)
+    if text and _G.type(text) == "string" and self.db.profile.noteLinksInChat == true then
+        -- If no charnotes are present then insert one.
+        if text:find("|Hcharnote:") == nil then
+            text = text:gsub("(|Hplayer:([^:]+).-|h.-|h)", AddNoteForChat)
+        end
+    end
+    return self.hooks[frame].AddMessage(frame, text, r, g, b, id, ...)
+end
+
+function PlayerNotes:CHAT_MSG_SYSTEM(event, message)
+    local name, type
+
+    if self.db.profile.showNotesOnWho == true then
+        name = LibDeformat(message, _G.WHO_LIST_FORMAT)
+        type = "WHO"
+    end
+
+    if not name and self.db.profile.showNotesOnWho == true then
+        name = LibDeformat(message, _G.WHO_LIST_GUILD_FORMAT)
+        type = "WHO"
+    end
+
+    if not name and self.db.profile.showNotesOnLogon == true then
+        name = LibDeformat(message, _G.ERR_FRIEND_ONLINE_SS)
+        type = "LOGON"
+    end
+
+    if name then
+        self:ScheduleTimer("DisplayNote", 0.1, name, type)
+    end
+end
+
+function PlayerNotes:ProcessGroupRosterUpdate()
+    local groupType = "party"
+    local numMembers = 0
+
+    numMembers = _G.GetNumGroupMembers()
+    if _G.IsInRaid() then
+        groupType = "raid"
+    end
+
+    if groupType == "raid" then
+        if self.db.profile.notesForRaidMembers ~= true then return end
+    else
+        if self.db.profile.notesForPartyMembers ~= true then return end
+    end
+
+    if numMembers == 0 then
+        -- Left a group
+        wipe(previousGroup)
+    else
+        local currentGroup = {}
+        local name
+
+        for i = 1, numMembers do
+            name = _G.GetUnitName(groupType .. i, true)
+            if name then
+                currentGroup[name] = true
+
+                if name ~= playerName and not previousGroup[name] == true then
+                    --if self.db.profile.debug then
+                    --    self:Print(name.." joined the group.")
+                    --end
+                    self:DisplayNote(name)
+                end
+            end
+        end
+
+        -- Set previous group to the current group
+        wipe(previousGroup)
+        for name in pairs(currentGroup) do
+            previousGroup[name] = true
+        end
+    end
+end
+
+-- Patch 5.4 will change the formatting of names with realms appended.
+-- Remove the spaces surrounding the dash between the name and realm.
+function PlayerNotes:RemoveSpacesFromRealm()
+    if not self.db.realm.removedSpacesFromRealm then
+        -- Find notes to be updated.
+        local check
+        local noteCount = 0
+        local invalidNotes = {}
+        for name, note in pairs(self.db.realm.notes) do
+            check = name:gmatch("[ ][-][ ]")
+            if check and check() then
+                noteCount = noteCount + 1
+                invalidNotes[name] = note
+            end
+        end
+        if self.db.profile.verbose then
+            local fmt = "Found %d notes with realm names to update."
+            self:Print(fmt:format(noteCount))
+        end
+        local ratingCount = 0
+        local invalidRatings = {}
+        for name, rating in pairs(self.db.realm.ratings) do
+            check = name:gmatch("[ ][-][ ]")
+            if check and check() then
+                ratingCount = ratingCount + 1
+                invalidRatings[name] = rating
+            end
+        end
+        if self.db.profile.verbose then
+            local fmt = "Found %d ratings with realm names to update."
+            self:Print(fmt:format(ratingCount))
+        end
+
+        if noteCount > 0 then
+            -- Backup the notes to be safe.
+            self.db.realm.oldNotes = {}
+            for name, note in pairs(self.db.realm.notes) do
+                self.db.realm.oldNotes[name] = note
+            end
+            -- Update notes.
+            for name, note in pairs(invalidNotes) do
+                local newName = name:gsub("[ ][-][ ]", "-", 1)
+                self.db.realm.notes[name] = nil
+                self.db.realm.notes[newName] = note
+            end
+        end
+
+        if ratingCount > 0 then
+            -- Backup the ratings to be safe.
+            self.db.realm.oldRatings = {}
+            for name, rating in pairs(self.db.realm.ratings) do
+                self.db.realm.oldRatings[name] = rating
+            end
+            -- Update ratings.
+            for name, rating in pairs(invalidRatings) do
+                local newName = name:gsub("[ ][-][ ]", "-", 1)
+                self.db.realm.ratings[name] = nil
+                self.db.realm.ratings[newName] = rating
+            end
+        end
+
+        self.db.realm.removedSpacesFromRealm = true
+    end
+end
+
+function PlayerNotes:RAID_ROSTER_UPDATE(event, message)
+    self:ProcessGroupRosterUpdate()
+end
+
+function PlayerNotes:PARTY_MEMBERS_CHANGED(event, message)
+    self:ProcessGroupRosterUpdate()
+end
+
+function PlayerNotes:GROUP_ROSTER_UPDATE(event, message)
+    self:ProcessGroupRosterUpdate()
+end
+
+function wrap(str, limit, indent, indent1, offset)
+    indent = indent or ""
+    indent1 = indent1 or indent
+    limit = limit or 72
+    offset = offset or 0
+    local here = 1 - #indent1 - offset
+    return indent1 .. str:gsub("(%s+)()(%S+)()",
+        function(sp, st, word, fi)
+            if fi - here > limit then
+                here = st - #indent
+                return "\n" .. indent .. word
+            end
+        end)
+end
+
+do
+    -- GameTooltip
+    uiHooks[#uiHooks + 1] = function()
+        local function OnTooltipSetUnit(self)
+            if AddonData.configDb.profile.showNotesInTooltips == false then
+                return
+            end
+            local _, unit = self:GetUnit()
+            showTooltip(GameTooltip, unit, 1)
+        end
+
+        GameTooltip:HookScript("OnTooltipSetUnit", OnTooltipSetUnit)
+        return 1
+    end
+
+    -- FriendsFrame
+    uiHooks[#uiHooks + 1] = function()
+        local function OnEnter(self)
+            if AddonData.configDb.profile.showNotesInTooltips == false then
+                return
+            end
+
+            local fullName, faction, level
+
+            if self.buttonType == FRIENDS_BUTTON_TYPE_BNET then
+                local bnetIDAccount = BNGetFriendInfo(self.id)
+                if bnetIDAccount then
+                    fullName, faction, level = GetNameAndRealmForBNetFriend(bnetIDAccount)
+                end
+            elseif self.buttonType == FRIENDS_BUTTON_TYPE_WOW then
+                fullName, level = GetFriendInfo(self.id)
+                faction = PLAYER_FACTION
+            end
+
+            if fullName then
+                -- GameTooltip:SetOwner(FriendsTooltip, "ANCHOR_BOTTOMRIGHT", -FriendsTooltip:GetWidth(), -4)
+                showTooltip(GameTooltip, fullName)
+            else
+                GameTooltip:Hide()
+            end
+        end
+
+        local function FriendTooltip_Hide()
+            if AddonData.configDb.profile.showNotesInTooltips == false then
+                return
+            end
+            GameTooltip:Hide()
+        end
+
+        local buttons = FriendsListFrameScrollFrame.buttons
+        for i = 1, #buttons do
+            local button = buttons[i]
+            button:HookScript("OnEnter", OnEnter)
+        end
+
+        --hooksecurefunc("FriendsFrameTooltip_Show", OnEnter)
+        hooksecurefunc(FriendsTooltip, "Hide", FriendTooltip_Hide)
+
+        return 1
+    end
+
+    -- Guild_UI
+    uiHooks[#uiHooks + 1] = function()
+        if _G.GuildFrame then
+            local function OnEnter(self)
+                if AddonData.configDb.profile.showNotesInTooltips == false then
+                    return
+                end
+
+                if self.guildIndex then
+                    local fullName, _, _, level = GetGuildRosterInfo(self.guildIndex)
+                    GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT", 0, 0)
+                    showTooltip(GameTooltip, fullName, 0, self)
+                end
+            end
+
+            local function OnLeave(self)
+                if self.guildIndex then
+                    GameTooltip:Hide()
+                end
+            end
+
+            for i = 1, 16 do
+                local b = _G["GuildRosterContainerButton" .. i]
+                b:HookScript("OnEnter", OnEnter)
+                b:HookScript("OnLeave", OnLeave)
+            end
+
+            return 1
+        end
+    end
+
+    -- Blizzard_Communities
+    uiHooks[#uiHooks + 1] = function()
+        if _G.CommunitiesFrame then
+            local function OnEnter(self)
+                if AddonData.configDb.profile.showNotesInTooltips == false then
+                    return
+                end
+                local info = self:GetMemberInfo()
+                if not info or (info.clubType ~= Enum.ClubType.Guild and info.clubType ~= Enum.ClubType.Character) then
+                    return
+                end
+                if info.name then
+                    local hasOwner = GameTooltip:GetOwner()
+                    if not hasOwner then
+                        GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT", 0, 0)
+                    end
+                    showTooltip(GameTooltip, info.name)
+                end
+            end
+
+            local function OnLeave(self)
+                GameTooltip:Hide()
+            end
+
+            local hooked = {}
+            local completed
+
+            local function HookButtons()
+                if completed then
+                    return
+                end
+                local buttons = _G.CommunitiesFrame.MemberList.ListScrollFrame.buttons
+                if not buttons then
+                    return
+                end
+                for _, b in pairs(buttons) do
+                    if not hooked[b] then
+                        hooked[b] = true
+                        b:HookScript("OnEnter", OnEnter)
+                        b:HookScript("OnLeave", OnLeave)
+                    end
+                end
+                if next(hooked) then
+                    completed = true -- one pass seems to create all the buttons
+                end
+            end
+
+            HookButtons()
+            hooksecurefunc(_G.CommunitiesFrame.MemberList, "RefreshLayout", HookButtons)
+
+            return 1
+        end
+    end
+
+    -- LFG
+    uiHooks[#uiHooks + 1] = function()
+        if _G.LFGListApplicationViewerScrollFrameButton1 then
+            local hooked = {}
+            local OnEnter, OnLeave
+
+            -- application queue
+            function OnEnter(self)
+                if AddonData.configDb.profile.showNotesInTooltips == false then
+                    return
+                end
+                if self.applicantID and self.Members then
+                    for i = 1, #self.Members do
+                        local b = self.Members[i]
+                        if not hooked[b] then
+                            hooked[b] = 1
+                            b:HookScript("OnEnter", OnEnter)
+                            b:HookScript("OnLeave", OnLeave)
+                        end
+                    end
+                elseif self.memberIdx then
+                    local fullName = C_LFGList.GetApplicantMemberInfo(self:GetParent().applicantID, self.memberIdx)
+                    if fullName then
+                        local hasOwner = GameTooltip:GetOwner()
+                        if not hasOwner then
+                            GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT", 0, 0)
+                        end
+                        showTooltip(GameTooltip, fullName)
+                    end
+                end
+            end
+
+            function OnLeave(self)
+                if self.applicantID or self.memberIdx then
+                    GameTooltip:Hide()
+                end
+            end
+
+            -- search results
+            local function SetSearchEntryTooltip(tooltip, resultID, autoAcceptOption)
+                if AddonData.configDb.profile.showNotesInTooltips == false then
+                    return
+                end
+                local results = C_LFGList.GetSearchResultInfo(resultID)
+                if not results then
+                    return
+                end
+                local activityID = results.activityID
+                local leaderName = results.leaderName
+                if leaderName then
+                    showTooltip(GameTooltip, leaderName)
+                end
+            end
+
+            hooksecurefunc("LFGListUtil_SetSearchEntryTooltip", SetSearchEntryTooltip)
+
+            -- execute delayed hooks
+            for i = 1, 14 do
+                local b = _G["LFGListApplicationViewerScrollFrameButton" .. i]
+                b:HookScript("OnEnter", OnEnter)
+                b:HookScript("OnLeave", OnLeave)
+            end
+
+            -- UnempoweredCover blocking removal
+            do
+                local f = LFGListFrame.ApplicationViewer.UnempoweredCover
+                f:EnableMouse(false)
+                f:EnableMouseWheel(false)
+                f:SetToplevel(false)
+            end
+
+            return 1
+        end
+    end
+
+    -- DropDownMenu (Units and LFD)
+    --    uiHooks[#uiHooks + 1] = function()
+    --        local function OnShow(self)
+    --            local dropdown = self.dropdown
+    --            if not dropdown then
+    --                return
+    --            end
+    --            if dropdown.Button == _G.LFGListFrameDropDownButton then -- LFD
+    --                print(dropdown.menuList[2].arg1);
+    --                PlayerNotes:updateLFGDropDown()
+    --            end
+    --        end
+    --
+    --        local function OnHide()
+    --        end
+    --
+    --        DropDownList1:HookScript("OnShow", OnShow)
+    --        DropDownList1:HookScript("OnHide", OnHide)
+    --
+    --        return 1
+    --    end
+end
+
+do
+    function GetNameAndRealmForBNetFriend(bnetIDAccount)
+        local index = BNGetFriendIndex(bnetIDAccount)
+        if index then
+            local numGameAccounts = BNGetNumFriendGameAccounts(index)
+            for i = 1, numGameAccounts do
+                local _, characterName, client, realmName, _, faction, _, _, _, _, level = BNGetFriendGameAccountInfo(index, i)
+                if client == BNET_CLIENT_WOW then
+                    if realmName then
+                        characterName = characterName .. "-" .. realmName:gsub("%s+", "")
+                    end
+                    return characterName, FACTION[faction], tonumber(level)
+                end
+            end
+        end
+    end
+
+    function GetNameRealmForBNetFriend(bnetIDAccount)
+        local index = BNGetFriendIndex(bnetIDAccount)
+        if index then
+            local numGameAccounts = BNGetNumFriendGameAccounts(index)
+            for i = 1, numGameAccounts do
+                local _, characterName, client, realmName, _, faction, _, _, _, _, level = BNGetFriendGameAccountInfo(index, i)
+                if client == BNET_CLIENT_WOW then
+                    return characterName, realmName
+                end
+            end
+        end
+    end
+
+    function showTooltip(tooltip, toonName, ...)
+        local separatorBelow = ...
+        local name, realm, unit = GetNameAndRealm(toonName)
+        -- if no realm then just return, might be happening before PLAYER_LOGIN fire
+        if not realm then return end
+
+        note, rating, main, nameFound = NotesDB:GetInfoForNameOrMain(name .. "-" .. realm)
+
+        if note then
+            if AddonData.configDb.profile.wrapTooltip == true then
+                note = wrap(note, AddonData.configDb.profile.wrapTooltipLength, "    ", "", 4)
+            end
+
+            tooltip:AddLine(" ")
+            if main and #main > 0 then
+                tooltip:AddLine(tooltipNoteWithMainFormat:format(GetRatingColor(rating), nameFound, note))
+            else
+                tooltip:AddLine(tooltipNoteFormat:format(GetRatingColor(rating), note),
+                    1, 1, 1, not AddonData.configDb.profile.wrapTooltip)
+            end
+
+            if separatorBelow then
+                tooltip:AddLine(" ")
+            end
+
+            tooltip:Show()
+        end
+    end
+
+    function GetNameAndRealm(arg1, arg2)
+        local name, realm, unit
+        if UnitExists(arg1) then
+            unit = arg1
+            if UnitIsPlayer(arg1) then
+                name, realm = UnitName(arg1)
+                realm = realm and realm ~= "" and realm or GetNormalizedRealmName()
+            end
+        elseif type(arg1) == "string" and arg1 ~= "" then
+            if arg1:find("-", nil, true) then
+                name, realm = ("-"):split(arg1)
+            else
+                name = arg1 -- assume this is the name
+            end
+            if not realm or realm == "" then
+                if type(arg2) == "string" and arg2 ~= "" then
+                    realm = arg2
+                else
+                    realm = GetNormalizedRealmName() -- assume they are on our realm
+                end
+            end
+        end
+        return name, realm, unit
+    end
+
+    function dump(o)
+        if type(o) == 'table' then
+            local s = '{ '
+            for k, v in pairs(o) do
+                if type(k) ~= 'number' then k = '"' .. k .. '"' end
+                s = s .. '[' .. k .. '] = ' .. dump(v) .. ','
+            end
+            return s .. '} '
+        else
+            return tostring(o)
+        end
+    end
+
+    local function ApplyHooks()
+        for i = #uiHooks, 1, -1 do
+            local func = uiHooks[i]
+            if func() then
+                table.remove(uiHooks, i)
+            end
+        end
+    end
+
+    local function editLFGPlayerNote(_, name)
+        PlayerNotes:EditNoteHandler(name)
+    end
+
+    function PlayerNotes:updateLFGDropDown()
+        local LFGListUtil_GetSearchEntryMenu_Old = LFGListUtil_GetSearchEntryMenu;
+        LFGListUtil_GetSearchEntryMenu = function(resultID)
+            local menuArr = LFGListUtil_GetSearchEntryMenu_Old(resultID);
+            local searchResultInfo = C_LFGList.GetSearchResultInfo(resultID);
+            local cancelIndex
+
+            for i = 0, #menuArr do
+                if menuArr[i] and not cancelIndex then
+                    if menuArr[i].func == editLFGPlayerNote then
+                        return menuArr
+                    elseif menuArr[i].text == CANCEL then
+                        cancelIndex = i
+                    end
+                end
+            end
+
+            if cancelIndex then
+                menuArr[cancelIndex] = {}
+                menuArr[cancelIndex].text = L["Edit Note"]
+                menuArr[cancelIndex].func = editLFGPlayerNote
+                menuArr[cancelIndex].arg1 = searchResultInfo.leaderName
+                menuArr[cancelIndex].disabled = not searchResultInfo.leaderName
+                menuArr[cancelIndex].notCheckable = true
+
+                cancelIndex = cancelIndex + 1
+                menuArr[cancelIndex] = {}
+                menuArr[cancelIndex].text = CANCEL
+                menuArr[cancelIndex].notCheckable = true
+            end
+
+            return menuArr;
+        end
+    end
+
+    function PlayerNotes:ADDON_LOADED(event, name)
+        ApplyHooks()
+        -- update after every addon load to make sure nothing removes the menu item
+        self:updateLFGDropDown()
+    end
+end
