@@ -933,7 +933,7 @@ function PlayerNotes:CreateNotesFrame()
     noteswindow:SetFrameStrata("DIALOG")
     noteswindow:SetToplevel(true)
     noteswindow:SetWidth(630)
-    noteswindow:SetHeight(430)
+    noteswindow:SetHeight(390)
     if self.db.profile.remember_main_pos then
         noteswindow:SetPoint("CENTER", _G.UIParent, "CENTER",
             self.db.profile.notes_window_x, self.db.profile.notes_window_y)
@@ -948,6 +948,9 @@ function PlayerNotes:CreateNotesFrame()
         edgeSize = 32,
         insets = { left = 11, right = 12, top = 12, bottom = 11 }
     })
+    noteswindow:SetScript("OnShow", function()
+        PlaySound(844) -- SOUNDKIT.IG_QUEST_LOG_OPEN
+    end)
 
     local ScrollingTable = LibStub("ScrollingTable");
 
@@ -1018,16 +1021,17 @@ function PlayerNotes:CreateNotesFrame()
     }
 
     local table = ScrollingTable:CreateST(cols, 15, nil, nil, noteswindow);
+    noteswindow.scrollframe = table
 
     local headertext = noteswindow:CreateFontString("PN_Notes_HeaderText", noteswindow, "GameFontNormalLarge")
-    headertext:SetPoint("TOP", noteswindow, "TOP", 0, -20)
+    headertext:SetPoint("TOP", noteswindow, "TOP", 0, -10)
     headertext:SetText(L["Player Notes"])
 
     local searchterm = _G.CreateFrame("EditBox", nil, noteswindow, "InputBoxTemplate")
     searchterm:SetFontObject(_G.ChatFontNormal)
     searchterm:SetWidth(300)
     searchterm:SetHeight(35)
-    searchterm:SetPoint("TOPLEFT", noteswindow, "TOPLEFT", 25, -50)
+    searchterm:SetPoint("TOPLEFT", noteswindow, "TOPLEFT", 25, -40)
     searchterm:SetScript("OnShow", function(this) this:SetFocus() end)
     searchterm:SetScript("OnEnterPressed", function(this) this:GetParent().table:SortData() end)
     searchterm:SetScript("OnEscapePressed",
@@ -1036,8 +1040,13 @@ function PlayerNotes:CreateNotesFrame()
             this:GetParent():Hide()
         end)
 
-    table.frame:SetPoint("TOP", searchterm, "BOTTOM", 0, -20)
+    table.frame:SetPoint("TOP", searchterm, "BOTTOM", 0, -30)
     table.frame:SetPoint("LEFT", noteswindow, "LEFT", 20, 0)
+
+    local closebutton = CreateFrame("Button", nil, noteswindow, "UIPanelCloseButton")
+    closebutton:SetPoint("TOPRIGHT", 2, 1)
+    closebutton:SetScript("OnClick", function(this) this:GetParent():Hide(); end)
+    noteswindow.closebutton = closebutton
 
     local searchbutton = _G.CreateFrame("Button", nil, noteswindow, "UIPanelButtonTemplate")
     searchbutton:SetText(L["Search"])
@@ -1045,6 +1054,7 @@ function PlayerNotes:CreateNotesFrame()
     searchbutton:SetHeight(20)
     searchbutton:SetPoint("LEFT", searchterm, "RIGHT", 10, 0)
     searchbutton:SetScript("OnClick", function(this) this:GetParent().table:SortData() end)
+    noteswindow.searchbutton = searchbutton
 
     local clearbutton = _G.CreateFrame("Button", nil, noteswindow, "UIPanelButtonTemplate")
     clearbutton:SetText(L["Clear"])
@@ -1056,19 +1066,13 @@ function PlayerNotes:CreateNotesFrame()
             searchterm:SetText("")
             this:GetParent().table:SortData()
         end)
-
-    local closebutton = _G.CreateFrame("Button", nil, noteswindow, "UIPanelButtonTemplate")
-    closebutton:SetText(L["Close"])
-    closebutton:SetWidth(90)
-    closebutton:SetHeight(20)
-    closebutton:SetPoint("BOTTOM", noteswindow, "BOTTOM", 0, 20)
-    closebutton:SetScript("OnClick", function(this) this:GetParent():Hide(); end)
+    noteswindow.clearbutton = clearbutton
 
     local deletebutton = _G.CreateFrame("Button", nil, noteswindow, "UIPanelButtonTemplate")
     deletebutton:SetText(L["Delete"])
     deletebutton:SetWidth(90)
     deletebutton:SetHeight(20)
-    deletebutton:SetPoint("BOTTOM", noteswindow, "BOTTOM", 120, 70)
+    deletebutton:SetPoint("BOTTOM", noteswindow, "BOTTOM", 120, 30)
     deletebutton:SetScript("OnClick",
         function(this)
             local frame = this:GetParent()
@@ -1081,12 +1085,13 @@ function PlayerNotes:CreateNotesFrame()
                 end
             end
         end)
+    noteswindow.deletebutton = deletebutton
 
     local editbutton = _G.CreateFrame("Button", nil, noteswindow, "UIPanelButtonTemplate")
     editbutton:SetText(L["Edit"])
     editbutton:SetWidth(90)
     editbutton:SetHeight(20)
-    editbutton:SetPoint("BOTTOM", noteswindow, "BOTTOM", 0, 70)
+    editbutton:SetPoint("BOTTOM", noteswindow, "BOTTOM", 0, 30)
     editbutton:SetScript("OnClick",
         function(this)
             local frame = this:GetParent()
@@ -1097,16 +1102,18 @@ function PlayerNotes:CreateNotesFrame()
                 end
             end
         end)
+    noteswindow.editbutton = editbutton
 
     local addbutton = _G.CreateFrame("Button", nil, noteswindow, "UIPanelButtonTemplate")
     addbutton:SetText(L["Add"])
     addbutton:SetWidth(90)
     addbutton:SetHeight(20)
-    addbutton:SetPoint("BOTTOM", noteswindow, "BOTTOM", -120, 70)
+    addbutton:SetPoint("BOTTOM", noteswindow, "BOTTOM", -120, 30)
     addbutton:SetScript("OnClick",
         function(this)
             self:AddNoteHandler()
         end)
+    noteswindow.addbutton = addbutton
 
     noteswindow.table = table
     noteswindow.searchterm = searchterm
@@ -1168,6 +1175,9 @@ function PlayerNotes:CreateNotesFrame()
         end)
     noteswindow:EnableMouse(true)
     noteswindow:Hide()
+
+    self:SkinFrame(noteswindow)
+
     return noteswindow
 end
 
@@ -1279,6 +1289,7 @@ function PlayerNotes:CreateConfirmDeleteFrame()
                 this:GetParent().parentFrame:Hide()
             end
         end)
+    deletewindow.deletebutton = deletebutton
 
     local cancelbutton = _G.CreateFrame("Button", nil, deletewindow, "UIPanelButtonTemplate")
     cancelbutton:SetText(L["Cancel"])
@@ -1286,6 +1297,7 @@ function PlayerNotes:CreateConfirmDeleteFrame()
     cancelbutton:SetHeight(20)
     cancelbutton:SetPoint("BOTTOM", deletewindow, "BOTTOM", 60, 20)
     cancelbutton:SetScript("OnClick", function(this) this:GetParent():Hide(); end)
+    deletewindow.cancelbutton = cancelbutton
 
     deletewindow.charname = charname
     deletewindow.parentFrame = nil
@@ -1303,6 +1315,7 @@ function PlayerNotes:CreateConfirmDeleteFrame()
     deletewindow:EnableMouse(true)
 
     deletewindow:Hide()
+    self:SkinFrame(deletewindow)
 
     return deletewindow
 end
@@ -1336,6 +1349,7 @@ function PlayerNotes:CreateEditNoteFrame()
             self:SaveEditNote(frame.charname:GetText(), frame.editbox:GetText(), rating)
             frame:Hide()
         end)
+    editwindow.savebutton = savebutton
 
     local removebutton = _G.CreateFrame("Button", nil, editwindow, "UIPanelButtonTemplate")
     removebutton:SetText(L["Remove"])
@@ -1350,6 +1364,7 @@ function PlayerNotes:CreateEditNoteFrame()
             confirmDeleteFrame:Show()
             confirmDeleteFrame:Raise()
         end)
+    editwindow.removebutton = removebutton
 
     local cancelbutton = _G.CreateFrame("Button", nil, editwindow, "UIPanelButtonTemplate")
     cancelbutton:SetText(L["Cancel"])
@@ -1357,6 +1372,7 @@ function PlayerNotes:CreateEditNoteFrame()
     cancelbutton:SetHeight(20)
     cancelbutton:SetPoint("BOTTOM", editwindow, "BOTTOM", 120, 20)
     cancelbutton:SetScript("OnClick", function(this) this:GetParent():Hide(); end)
+    editwindow.cancelbutton = cancelbutton
 
     local headertext = editwindow:CreateFontString("CN_HeaderText", editwindow, "GameFontNormalLarge")
     headertext:SetPoint("TOP", editwindow, "TOP", 0, -20)
@@ -1395,6 +1411,7 @@ function PlayerNotes:CreateEditNoteFrame()
     _G.UIDropDownMenu_SetButtonWidth(ratingDropdown, 124)
     _G.UIDropDownMenu_SetSelectedValue(ratingDropdown, 0)
     _G.UIDropDownMenu_JustifyText(ratingDropdown, "LEFT")
+    editwindow.ratingdropdown = ratingDropdown
 
     local editBoxContainer = _G.CreateFrame("Frame", nil, editwindow)
     editBoxContainer:SetPoint("TOPLEFT", editwindow, "TOPLEFT", 20, -150)
@@ -1408,6 +1425,7 @@ function PlayerNotes:CreateEditNoteFrame()
         insets = { left = 4, right = 3, top = 4, bottom = 3 }
     })
     editBoxContainer:SetBackdropColor(0, 0, 0, 0.9)
+    editwindow.scrolleditframe = editBoxContainer
 
     local scrollArea = _G.CreateFrame("ScrollFrame", "CN_EditNote_EditScroll", editwindow, "UIPanelScrollFrameTemplate")
     scrollArea:SetPoint("TOPLEFT", editBoxContainer, "TOPLEFT", 6, -6)
@@ -1415,6 +1433,8 @@ function PlayerNotes:CreateEditNoteFrame()
 
     local editbox = _G.CreateFrame("EditBox", "CN_EditNote_EditBox", editwindow)
     editbox:SetFontObject(_G.ChatFontNormal)
+    editbox:SetPoint("TOPLEFT")
+    editbox:SetPoint("BOTTOMLEFT")
     editbox:SetMultiLine(true)
     editbox:SetAutoFocus(true)
     editbox:SetWidth(300)
@@ -1431,6 +1451,7 @@ function PlayerNotes:CreateEditNoteFrame()
             end
         end
     )
+    editwindow.scrolleditframe.editboxframe = editbox
 
     if not self.db.profile.multilineNotes then
         editbox:SetScript("OnEnterPressed",
@@ -1467,6 +1488,8 @@ function PlayerNotes:CreateEditNoteFrame()
     editwindow.ratingDropdown = ratingDropdown
     editwindow.removeButton = removebutton
     editwindow.saveButton = savebutton
+    editwindow.headertext = headertext
+    editwindow.ratinglabel = ratingLabel
 
     editwindow:SetMovable(true)
     editwindow:RegisterForDrag("LeftButton")
@@ -1481,6 +1504,7 @@ function PlayerNotes:CreateEditNoteFrame()
     editwindow:EnableMouse(true)
 
     editwindow:Hide()
+    self:SkinFrame(editwindow)
 
     return editwindow
 end
@@ -1519,6 +1543,7 @@ function PlayerNotes:CreateAddNoteFrame()
 
             frame:Hide()
         end)
+    addwindow.savebutton = savebutton
 
     local cancelbutton = _G.CreateFrame("Button", nil, addwindow, "UIPanelButtonTemplate")
     cancelbutton:SetText(L["Cancel"])
@@ -1526,6 +1551,7 @@ function PlayerNotes:CreateAddNoteFrame()
     cancelbutton:SetHeight(20)
     cancelbutton:SetPoint("BOTTOM", addwindow, "BOTTOM", 60, 20)
     cancelbutton:SetScript("OnClick", function(this) this:GetParent():Hide(); end)
+    addwindow.cancelbutton = cancelbutton
 
     local headertext = addwindow:CreateFontString("CN_HeaderText", addwindow, "GameFontNormalLarge")
     headertext:SetPoint("TOP", addwindow, "TOP", 0, -20)
@@ -1578,6 +1604,7 @@ function PlayerNotes:CreateAddNoteFrame()
     _G.UIDropDownMenu_SetButtonWidth(ratingDropdown, 124)
     _G.UIDropDownMenu_SetSelectedValue(ratingDropdown, 0)
     _G.UIDropDownMenu_JustifyText(ratingDropdown, "LEFT")
+    addwindow.ratingdropdown = ratingDropdown
 
     local editBoxContainer = _G.CreateFrame("Frame", nil, addwindow)
     editBoxContainer:SetPoint("TOPLEFT", addwindow, "TOPLEFT", 20, -150)
@@ -1591,6 +1618,7 @@ function PlayerNotes:CreateAddNoteFrame()
         insets = { left = 4, right = 3, top = 4, bottom = 3 }
     })
     editBoxContainer:SetBackdropColor(0, 0, 0, 0.9)
+    addwindow.scrolleditframe = editBoxContainer
 
     local scrollArea = _G.CreateFrame("ScrollFrame", "CN_EditNote_EditScroll", addwindow, "UIPanelScrollFrameTemplate")
     scrollArea:SetPoint("TOPLEFT", editBoxContainer, "TOPLEFT", 6, -6)
@@ -1614,6 +1642,7 @@ function PlayerNotes:CreateAddNoteFrame()
             end
         end
     )
+    addwindow.scrolleditframe.editboxframe = editbox
 
     charname:SetScript("OnTextChanged",
         function(this)
@@ -1658,6 +1687,8 @@ function PlayerNotes:CreateAddNoteFrame()
     scrollArea:SetScrollChild(editbox)
 
     addwindow.charname = charname
+    addwindow.nameinput = charname
+    addwindow.namelabel = nameLabel
     addwindow.editbox = editbox
     addwindow.ratingDropdown = ratingDropdown
 
@@ -1674,6 +1705,7 @@ function PlayerNotes:CreateAddNoteFrame()
     addwindow:EnableMouse(true)
 
     addwindow:Hide()
+    self:SkinFrame(addwindow)
 
     return addwindow
 end
@@ -1923,16 +1955,24 @@ end
 
 function PlayerNotes:EditNoteMenuClick(dropdownMenu, which)
     local menu = _G.UIDROPDOWNMENU_INIT_MENU
-    local name, realm, unit, playerRealm
+    local name, realm, unit
 
     if which == "BN_FRIEND" and menu.accountInfo and menu.accountInfo.bnetAccountID then
-        name, playerRealm = GetNameRealmForBNetFriend(menu.accountInfo.bnetAccountID)
+        name, realm = GetNameRealmForBNetFriend(menu.accountInfo.bnetAccountID)
     else
-        name, realm, unit = GetNameAndRealm(menu.name)
-        playerRealm = menu.server or realm
+        local dropdownFullName
+        if dropdownMenu.name then
+            if dropdownMenu.server and not dropdownMenu.name:find("-") then
+                dropdownFullName = dropdownMenu.name .. "-" .. dropdownMenu.server
+            else
+                dropdownFullName = dropdownMenu.name
+            end
+        end
+
+        name, realm, unit = GetNameAndRealm(dropdownMenu.chatTarget or dropdownFullName)
     end
 
-    local fullname = NotesDB:FormatNameWithRealm(name, playerRealm)
+    local fullname = NotesDB:FormatNameWithRealm(name, realm)
     if not fullname then
         print("Player not found/not logged in.")
         return
@@ -1940,7 +1980,7 @@ function PlayerNotes:EditNoteMenuClick(dropdownMenu, which)
 
     if PlayerNotes.db.profile.debug then
         local strFormat = "Menu Click: %s - %s -> %s"
-        PlayerNotes:Print(strFormat:format(_G.tostring(name), _G.tostring(playerRealm),
+        PlayerNotes:Print(strFormat:format(_G.tostring(name), _G.tostring(realm),
             _G.tostring(fullname)))
     end
     PlayerNotes:EditNoteHandler(fullname)
@@ -2555,7 +2595,7 @@ do
         end
     end
 
-    local function editLFGPlayerNote(_, name)
+    local function PlayerNotes_editLFGPlayerNote(_, name)
         PlayerNotes:EditNoteHandler(name)
     end
 
@@ -2564,22 +2604,25 @@ do
         LFGListUtil_GetSearchEntryMenu = function(resultID)
             local menuArr = LFGListUtil_GetSearchEntryMenu_Old(resultID);
             local searchResultInfo = C_LFGList.GetSearchResultInfo(resultID);
-            local cancelIndex
+            local cancelIndex, foundMenuIndex
 
             for i = 0, #menuArr do
                 if menuArr[i] and not cancelIndex then
-                    if menuArr[i].func == editLFGPlayerNote then
-                        return menuArr
+                    if menuArr[i].func == PlayerNotes_editLFGPlayerNote then
+                        foundMenuIndex = i
                     elseif menuArr[i].text == CANCEL then
                         cancelIndex = i
                     end
                 end
             end
 
-            if cancelIndex then
+            if foundMenuIndex then
+                menuArr[foundMenuIndex].arg1 = searchResultInfo.leaderName
+                menuArr[foundMenuIndex].disabled = not searchResultInfo.leaderName
+            elseif cancelIndex then
                 menuArr[cancelIndex] = {}
                 menuArr[cancelIndex].text = L["Edit Note"]
-                menuArr[cancelIndex].func = editLFGPlayerNote
+                menuArr[cancelIndex].func = PlayerNotes_editLFGPlayerNote
                 menuArr[cancelIndex].arg1 = searchResultInfo.leaderName
                 menuArr[cancelIndex].disabled = not searchResultInfo.leaderName
                 menuArr[cancelIndex].notCheckable = true

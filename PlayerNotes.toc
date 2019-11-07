@@ -8,9 +8,9 @@
 ## X-Category: Interface Enhancements 
 ## SavedVariables: PlayerNotesDB
 
-embeds.xml
-
-locale.xml
+Libs\libs.xml
+Locale\locale.xml
 
 NotesDB.lua
 PlayerNotes.lua
+Skin.lua
