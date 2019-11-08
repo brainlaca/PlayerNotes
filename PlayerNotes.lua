@@ -2467,26 +2467,26 @@ do
     end
 
     -- DropDownMenu (Units and LFD)
-    --    uiHooks[#uiHooks + 1] = function()
-    --        local function OnShow(self)
-    --            local dropdown = self.dropdown
-    --            if not dropdown then
-    --                return
-    --            end
-    --            if dropdown.Button == _G.LFGListFrameDropDownButton then -- LFD
-    --                print(dropdown.menuList[2].arg1);
-    --                PlayerNotes:updateLFGDropDown()
-    --            end
-    --        end
-    --
-    --        local function OnHide()
-    --        end
-    --
-    --        DropDownList1:HookScript("OnShow", OnShow)
-    --        DropDownList1:HookScript("OnHide", OnHide)
-    --
-    --        return 1
-    --    end
+--    uiHooks[#uiHooks + 1] = function()
+--        local function OnShow(self)
+--            local dropdown = self.dropdown
+--            if not dropdown then
+--                return
+--            end
+--            if dropdown.Button == _G.LFGListFrameDropDownButton then -- LFD
+--                print("clicked: " .. dropdown.menuList[2].arg1);
+--                -- PlayerNotes:updateLFGDropDowns()
+--            end
+--        end
+--
+--        local function OnHide()
+--        end
+--
+--        DropDownList1:HookScript("OnShow", OnShow)
+--        DropDownList1:HookScript("OnHide", OnHide)
+--
+--        return 1
+--    end
 end
 
 do
@@ -2599,47 +2599,61 @@ do
         PlayerNotes:EditNoteHandler(name)
     end
 
-    function PlayerNotes:updateLFGDropDown()
-        local LFGListUtil_GetSearchEntryMenu_Old = LFGListUtil_GetSearchEntryMenu;
-        LFGListUtil_GetSearchEntryMenu = function(resultID)
-            local menuArr = LFGListUtil_GetSearchEntryMenu_Old(resultID);
-            local searchResultInfo = C_LFGList.GetSearchResultInfo(resultID);
-            local cancelIndex, foundMenuIndex
+    local function addEditNoteButton(menuArr, playerName)
+        local cancelIndex, foundMenuIndex
 
-            for i = 0, #menuArr do
-                if menuArr[i] and not cancelIndex then
-                    if menuArr[i].func == PlayerNotes_editLFGPlayerNote then
-                        foundMenuIndex = i
-                    elseif menuArr[i].text == CANCEL then
-                        cancelIndex = i
-                    end
+        for i = 0, #menuArr do
+            if menuArr[i] and not cancelIndex then
+                if menuArr[i].func == PlayerNotes_editLFGPlayerNote then
+                    foundMenuIndex = i
+                elseif menuArr[i].text == CANCEL then
+                    cancelIndex = i
                 end
             end
+        end
 
-            if foundMenuIndex then
-                menuArr[foundMenuIndex].arg1 = searchResultInfo.leaderName
-                menuArr[foundMenuIndex].disabled = not searchResultInfo.leaderName
-            elseif cancelIndex then
-                menuArr[cancelIndex] = {}
-                menuArr[cancelIndex].text = L["Edit Note"]
-                menuArr[cancelIndex].func = PlayerNotes_editLFGPlayerNote
-                menuArr[cancelIndex].arg1 = searchResultInfo.leaderName
-                menuArr[cancelIndex].disabled = not searchResultInfo.leaderName
-                menuArr[cancelIndex].notCheckable = true
+        if foundMenuIndex then
+            menuArr[foundMenuIndex].arg1 = playerName
+            menuArr[foundMenuIndex].disabled = not playerName
+        elseif cancelIndex then
+            menuArr[cancelIndex] = {}
+            menuArr[cancelIndex].text = L["Edit Note"]
+            menuArr[cancelIndex].func = PlayerNotes_editLFGPlayerNote
+            menuArr[cancelIndex].arg1 = playerName
+            menuArr[cancelIndex].disabled = not playerName
+            menuArr[cancelIndex].notCheckable = true
 
-                cancelIndex = cancelIndex + 1
-                menuArr[cancelIndex] = {}
-                menuArr[cancelIndex].text = CANCEL
-                menuArr[cancelIndex].notCheckable = true
-            end
+            cancelIndex = cancelIndex + 1
+            menuArr[cancelIndex] = {}
+            menuArr[cancelIndex].text = CANCEL
+            menuArr[cancelIndex].notCheckable = true
+        end
 
-            return menuArr;
+        return menuArr;
+    end
+
+    function PlayerNotes:updateLFGDropDowns()
+        local LFGListUtil_GetSearchEntryMenu_Old = LFGListUtil_GetSearchEntryMenu
+        LFGListUtil_GetSearchEntryMenu = function(resultID)
+            local menuArr = LFGListUtil_GetSearchEntryMenu_Old(resultID)
+            local searchResultInfo = C_LFGList.GetSearchResultInfo(resultID)
+
+            return addEditNoteButton(menuArr, searchResultInfo.leaderName)
+        end
+
+        local LFGListUtil_GetApplicantMemberMenu_Old = LFGListUtil_GetApplicantMemberMenu
+        LFGListUtil_GetApplicantMemberMenu = function(applicantID, memberIdx)
+            local menuArr = LFGListUtil_GetApplicantMemberMenu_Old(applicantID, memberIdx)
+            local name, class, localizedClass, level, itemLevel, honorLevel, tank, healer, damage, assignedRole =
+             C_LFGList.GetApplicantMemberInfo(applicantID, memberIdx)
+
+            return addEditNoteButton(menuArr, name)
         end
     end
 
     function PlayerNotes:ADDON_LOADED(event, name)
         ApplyHooks()
         -- update after every addon load to make sure nothing removes the menu item
-        self:updateLFGDropDown()
+        self:updateLFGDropDowns()
     end
 end
