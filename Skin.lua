@@ -90,7 +90,6 @@ do
                 end
                 if scrolleditframe.editboxframe then
                     S:HandleEditBox(scrolleditframe.editboxframe)
-                    -- scrolleditframe.editboxframe.backdrop:SetBackdropBorderColor(unpack(E.media.bordercolor))
                     scrolleditframe.editboxframe.backdrop:SetAllPoints(scrolleditframe)
                 end
                 if scrolleditframe.editboxframe and scrolleditframe.editboxframe.scrollArea then
