@@ -1,5 +1,8 @@
 # PlayerNotes
 
+## [1.0.3] (2019-11-08)
+- Fix LFG applicant right click menu
+
 ## [1.0.2] (2019-11-07)
 - ElvUI skin
 - Further fixes (logic and UI)
