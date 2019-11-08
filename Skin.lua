@@ -108,6 +108,7 @@ do
             if close and close.SetAlpha then
                 S:HandleCloseButton(close)
                 close:SetAlpha(1)
+                close:SetPoint("TOPRIGHT", 2, 1)
             end
 
             -- align editbox rating text

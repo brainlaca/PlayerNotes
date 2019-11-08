@@ -1044,7 +1044,7 @@ function PlayerNotes:CreateNotesFrame()
     table.frame:SetPoint("LEFT", noteswindow, "LEFT", 20, 0)
 
     local closebutton = CreateFrame("Button", nil, noteswindow, "UIPanelCloseButton")
-    closebutton:SetPoint("TOPRIGHT", 2, 1)
+    closebutton:SetPoint("TOPRIGHT", -4, -4)
     closebutton:SetScript("OnClick", function(this) this:GetParent():Hide(); end)
     noteswindow.closebutton = closebutton
 
