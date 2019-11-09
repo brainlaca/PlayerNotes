@@ -7,17 +7,63 @@ do
         return frame[element] or FrameName and (_G[FrameName..element] or strfind(FrameName, element)) or nil
     end
 
+    -- copied over from elvui, needed to override as text alignment can mess up the dropdown field
+    local function HandleDropDown(frame, width, pos)
+        local frameName = frame.GetName and frame:GetName()
+        local button = frame.Button or frameName and (_G[frameName.."Button"] or _G[frameName.."_Button"])
+        local text = frameName and _G[frameName.."Text"] or frame.Text
+        local icon = frame.Icon
+        local E, L, V, P, G = unpack(ElvUI)
+        local S
+        if E then S = E:GetModule("Skins") end
+
+        if not S then
+            return
+        end
+
+        if not width then
+            width = 155
+        end
+
+        frame:StripTextures()
+        frame:SetWidth(width)
+
+        frame:CreateBackdrop()
+        frame:SetFrameLevel(frame:GetFrameLevel() + 2)
+        frame.backdrop:SetPoint("TOPLEFT", 20, -2)
+        frame.backdrop:SetPoint("BOTTOMRIGHT", button, "BOTTOMRIGHT", 2, -2)
+
+        button:ClearAllPoints()
+        if pos then
+            button:SetPoint("TOPRIGHT", frame.Right, -20, -21)
+        else
+            button:SetPoint("RIGHT", frame, "RIGHT", -10, 3)
+        end
+        button.SetPoint = E.noop
+        S:HandleNextPrevButton(button)
+
+        if icon then
+            icon:SetPoint("LEFT", 23, 0)
+        end 
+    end
+
     local function SkinElvUI(frame)
         local E, L, V, P, G = unpack(ElvUI)
         local S
         if E then S = E:GetModule("Skins") end
 
         if S then
+            local frameName = frame.GetName and frame:GetName()
+
             if frame.StripTextures then
                 frame:StripTextures()
             end
             if frame.SetTemplate then
-                frame:SetTemplate("Transparent")
+                if frameName == "PlayerNotesWindow" then
+                    frame:SetTemplate("Transparent")
+                else
+                    frame:SetTemplate(nil, true)
+                end
             end
 
             -- buttons
@@ -41,7 +87,7 @@ do
             -- dropdown
             local ratingdropdown = frame.ratingdropdown
             if ratingdropdown then
-                S:HandleDropDownBox(ratingdropdown)
+                HandleDropDown(ratingdropdown)
             end
 
             -- scrolltable
@@ -109,14 +155,6 @@ do
                 close:SetAlpha(1)
                 close:SetPoint("TOPRIGHT", 2, 1)
             end
-
-            -- align editbox rating text
-            local frameName = frame.GetName and frame:GetName()
-            if frameName == "PlayerNotesEditWindow" then
-                frame.charname:SetPoint("BOTTOM", frame.headertext, "BOTTOM", 0, -34)
-                ratingdropdown:SetPoint("TOPLEFT", frame.ratinglabel, "TOPRIGHT", 30, 5)
-            end
-
         end
     end
 
@@ -124,5 +162,20 @@ do
         if IsAddOnLoaded("ElvUI") then
             SkinElvUI(frame)
         end
+    end
+
+    function PlayerNotes:ReskinFrame(frame, child)
+        local frameName = frame.GetName and frame:GetName()
+
+            if frame.StripTextures then
+                frame:StripTextures()
+            end
+            if frame.SetTemplate then
+                if frameName == "PlayerNotesWindow" or not child then
+                    frame:SetTemplate("Transparent")
+                else
+                    frame:SetTemplate(nil, true)
+                end
+            end
     end
 end

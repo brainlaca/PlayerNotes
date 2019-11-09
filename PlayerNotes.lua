@@ -1098,7 +1098,7 @@ function PlayerNotes:CreateNotesFrame()
             if frame.table:GetSelection() then
                 local row = frame.table:GetRow(frame.table:GetSelection())
                 if row and row[NAME_COL] and #row[NAME_COL] > 0 then
-                    self:EditNoteHandler(row[NAME_COL])
+                    self:EditNoteHandler(row[NAME_COL], true)
                 end
             end
         end)
@@ -1111,7 +1111,7 @@ function PlayerNotes:CreateNotesFrame()
     addbutton:SetPoint("BOTTOM", noteswindow, "BOTTOM", -120, 30)
     addbutton:SetScript("OnClick",
         function(this)
-            self:AddNoteHandler()
+            self:AddNoteHandler(true)
         end)
     noteswindow.addbutton = addbutton
 
@@ -1710,53 +1710,7 @@ function PlayerNotes:CreateAddNoteFrame()
     return addwindow
 end
 
-local EditNoteFrame = nil
-function PlayerNotes:ShowEditNoteFrame(name, note)
-    if EditNoteFrame then return end
-
-    local frame = AGU:Create("Frame")
-    frame:SetTitle(L["Edit Note"])
-    frame:SetWidth(400)
-    frame:SetHeight(250)
-    frame:SetLayout("Flow")
-    frame:SetCallback("OnClose", function(widget)
-        widget:ReleaseChildren()
-        widget:Release()
-        EditNoteFrame = nil
-    end)
-    EditNoteFrame = frame
-
-    local text = AGU:Create("Label")
-    text:SetText(name)
-    text:SetFont(_G.GameFontNormalLarge:GetFont())
-    text.label:SetJustifyH("CENTER")
-    text:SetFullWidth(true)
-    text:SetCallback("OnRelease",
-        function(widget)
-            widget.label:SetJustifyH("LEFT")
-        end)
-    frame:AddChild(text)
-
-    local spacer = AGU:Create("Label")
-    spacer:SetFullWidth(true)
-    spacer:SetText(" ")
-    frame:AddChild(spacer)
-
-    local editbox = AGU:Create("MultiLineEditBox")
-    editbox:SetFullWidth(true)
-    editbox:SetText(note)
-    editbox:SetLabel(L["Note"])
-    editbox:SetNumLines(5)
-    editbox:SetMaxLetters(0)
-    editbox:SetFocus()
-    editbox.editBox:HighlightText()
-    editbox:SetCallback("OnEnterPressed", function(widget, event, noteText)
-        PlayerNotes:SaveEditNote(name, noteText)
-    end)
-    frame:AddChild(editbox)
-end
-
-function PlayerNotes:EditNoteHandler(input)
+function PlayerNotes:EditNoteHandler(input, child)
     local name = nil
     if input and #input > 0 then
         name = input
@@ -1786,6 +1740,7 @@ function PlayerNotes:EditNoteHandler(input)
             editwindow.removeButton:Enable()
         end
 
+        PlayerNotes:ReskinFrame(editwindow, child)
         editwindow:Show()
         editwindow:Raise()
 
@@ -1797,13 +1752,14 @@ function PlayerNotes:EditNoteHandler(input)
     end
 end
 
-function PlayerNotes:AddNoteHandler()
+function PlayerNotes:AddNoteHandler(child)
     local addwindow = addNoteFrame
     local rating = 0
 
     addwindow.charname:SetText("")
     addwindow.editbox:SetText("")
 
+    PlayerNotes:ReskinFrame(addwindow, child)
     addwindow:Show()
     addwindow:Raise()
 
