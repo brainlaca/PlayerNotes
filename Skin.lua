@@ -1,5 +1,7 @@
-local ADDON_NAME, AddonData = ...
-local PlayerNotes = LibStub("AceAddon-3.0"):GetAddon(ADDON_NAME)
+local P, D, L = unpack(select(2, ...)); -- P: addon, D: data, L: locale
+
+local _G = _G
+local pairs = _G.pairs
 
 do
     local function GrabElement(frame, element, parentName)
@@ -158,13 +160,15 @@ do
         end
     end
 
-    function PlayerNotes:SkinFrame(frame)
+    function P:SkinFrames(frames)
         if IsAddOnLoaded("ElvUI") then
-            SkinElvUI(frame)
+            for k, v in pairs (frames) do
+                SkinElvUI(v)
+            end
         end
     end
 
-    function PlayerNotes:ReskinFrame(frame, child)
+    function P:ReskinFrame(frame, child)
         local frameName = frame.GetName and frame:GetName()
 
             if frame.StripTextures then

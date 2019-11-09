@@ -11,6 +11,11 @@
 Libs\libs.xml
 Locale\locale.xml
 
-NotesDB.lua
 PlayerNotes.lua
+NotesDB.lua
+Util.lua
+Hook.lua
+LFG.lua
+Frames\frames.xml
+Core.lua
 Skin.lua
