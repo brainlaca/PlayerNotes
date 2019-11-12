@@ -1,23 +1,17 @@
-local _G = getfenv(0)
-local ADDON_NAME, AddonData = ...
+local P, D, L = unpack(select(2, ...)); -- P: addon, D: data, L: locale
 
-local NotesDB = {}
-AddonData.NotesDB = NotesDB
+local NotesDb = {}
+D.NotesDb = NotesDb
 
 -- Use local versions of standard LUA items for performance
+local _G = _G
 local string = _G.string
-local table = _G.table
-local pairs = _G.pairs
-local ipairs = _G.ipairs
 local select = _G.select
-local tinsert, tremove, tContains = tinsert, tremove, tContains
-local unpack, next = _G.unpack, _G.next
-local wipe = _G.wipe
 
 local LibAlts = LibStub("LibAlts-1.0")
 
-NotesDB.playerRealm = nil
-NotesDB.playerRealmAbbr = nil
+NotesDb.playerRealm = nil
+NotesDb.playerRealmAbbr = nil
 
 local realmNames = {
     ["Aeriepeak"] = "AeriePeak",
@@ -81,20 +75,20 @@ local MULTIBYTE_FIRST_CHAR = "^([\192-\255]?%a?[\128-\191]*)"
 -- @name :TitleCase
 -- @param name The name to be converted.
 -- @return string The converted name.
-function NotesDB:TitleCase(name)
+function NotesDb:TitleCase(name)
     if not name then return "" end
     if #name == 0 then return "" end
     name = name:lower()
     return name:gsub(MULTIBYTE_FIRST_CHAR, string.upper, 1)
 end
 
-function NotesDB:GetProperRealmName(realm)
+function NotesDb:GetProperRealmName(realm)
     if not realm then return end
     realm = self:TitleCase(realm:gsub("[ -]", ""))
     return realmNames[realm] or realm
 end
 
-function NotesDB:FormatNameWithRealm(name, realm, relative)
+function NotesDb:FormatNameWithRealm(name, realm, relative)
     if not name then return end
     name = self:TitleCase(name)
     realm = self:GetProperRealmName(realm)
@@ -107,7 +101,7 @@ function NotesDB:FormatNameWithRealm(name, realm, relative)
     end
 end
 
-function NotesDB:FormatRealmName(realm)
+function NotesDb:FormatRealmName(realm)
     -- Spaces are removed.
     -- Dashes are removed. (e.g., Azjol-Nerub)
     -- Apostrophe / single quotes are not removed.
@@ -115,13 +109,13 @@ function NotesDB:FormatRealmName(realm)
     return realm:gsub("[ -]", "")
 end
 
-function NotesDB:HasRealm(name)
+function NotesDb:HasRealm(name)
     if not name then return end
     local matches = name:gmatch("[-]")
     return matches and matches()
 end
 
-function NotesDB:ParseName(name)
+function NotesDb:ParseName(name)
     if not name then return end
     local matches = name:gmatch("([^%-]+)")
     if matches then
@@ -132,12 +126,12 @@ function NotesDB:ParseName(name)
     return nil
 end
 
-function NotesDB:FormatUnitName(name, relative)
+function NotesDb:FormatUnitName(name, relative)
     local nameOnly, realm = self:ParseName(name)
     return self:FormatNameWithRealm(nameOnly, realm, relative)
 end
 
-function NotesDB:FormatUnitList(sep, relative, ...)
+function NotesDb:FormatUnitList(sep, relative, ...)
     local str = ""
     local first = true
     local v
@@ -152,42 +146,42 @@ function NotesDB:FormatUnitList(sep, relative, ...)
     return str
 end
 
-function NotesDB:GetAlternateName(name)
+function NotesDb:GetAlternateName(name)
     local nameOnly, realm = self:ParseName(name)
     return realm and self:TitleCase(nameOnly) or
             self:FormatNameWithRealm(self:TitleCase(nameOnly), self.playerRealmAbbr)
 end
 
-function NotesDB:GetNote(name)
-    if self.db.realm.notes and name then
+function NotesDb:GetNote(name)
+    if D.db.realm.notes and name then
         local nameFound = self:FormatUnitName(name)
-        local note = self.db.realm.notes[nameFound]
+        local note = D.db.realm.notes[nameFound]
         if not note then
             local altName = self:GetAlternateName(name)
-            note = self.db.realm.notes[altName]
+            note = D.db.realm.notes[altName]
             if note then nameFound = altName end
         end
         return note, nameFound
     end
 end
 
-function NotesDB:GetRating(name)
-    if self.db.realm.ratings and name then
+function NotesDb:GetRating(name)
+    if D.db.realm.ratings and name then
         local nameFound = self:FormatUnitName(name)
-        local rating = self.db.realm.ratings[nameFound]
+        local rating = D.db.realm.ratings[nameFound]
         if not rating then
             local altName = self:GetAlternateName(name)
-            rating = self.db.realm.ratings[altName]
+            rating = D.db.realm.ratings[altName]
             if rating then nameFound = altName end
         end
         return rating, nameFound
     end
 end
 
-function NotesDB:SetNote(name, note)
-    if self.db.realm.notes and name then
+function NotesDb:SetNote(name, note)
+    if D.db.realm.notes and name then
         name = self:FormatUnitName(name)
-        self.db.realm.notes[name] = note
+        D.db.realm.notes[name] = note
 
         if self.PlayerNotes and self.PlayerNotes.UpdateNote then
             self.PlayerNotes:UpdateNote(name, note)
@@ -195,10 +189,10 @@ function NotesDB:SetNote(name, note)
     end
 end
 
-function NotesDB:SetRating(name, rating)
-    if self.db.realm.ratings and name and rating >= -1 and rating <= 1 then
+function NotesDb:SetRating(name, rating)
+    if D.db.realm.ratings and name and rating >= -1 and rating <= 1 then
         name = self:FormatUnitName(name)
-        self.db.realm.ratings[name] = rating
+        D.db.realm.ratings[name] = rating
 
         if self.PlayerNotes and self.PlayerNotes.UpdateRating then
             self.PlayerNotes:UpdateRating(name, rating)
@@ -206,13 +200,18 @@ function NotesDB:SetRating(name, rating)
     end
 end
 
-function NotesDB:DeleteNote(name)
-    if self.db.realm.notes and name then
+function NotesDb:SetNoteAndRating(name, note, rating)
+    NotesDb:SetNote(name, note)
+    NotesDb:SetRating(name, rating)
+end
+
+function NotesDb:DeleteNote(name)
+    if D.db.realm.notes and name then
         name = self:FormatUnitName(name)
 
         -- Delete both the note and the rating.
-        self.db.realm.notes[name] = nil
-        self.db.realm.ratings[name] = nil
+        D.db.realm.notes[name] = nil
+        D.db.realm.ratings[name] = nil
 
         if self.PlayerNotes and self.PlayerNotes.RemoveNote then
             self.PlayerNotes:RemoveNote(name)
@@ -220,10 +219,10 @@ function NotesDB:DeleteNote(name)
     end
 end
 
-function NotesDB:DeleteRating(name)
-    if self.db.realm.ratings and name then
+function NotesDb:DeleteRating(name)
+    if D.db.realm.ratings and name then
         name = self:FormatUnitName(name)
-        self.db.realm.ratings[name] = nil
+        D.db.realm.ratings[name] = nil
 
         if self.PlayerNotes and self.PlayerNotes.RemoveRating then
             self.PlayerNotes:RemoveRating(name)
@@ -231,7 +230,7 @@ function NotesDB:DeleteRating(name)
     end
 end
 
-function NotesDB:GetInfoForNameOrMain(name)
+function NotesDb:GetInfoForNameOrMain(name)
     name = self:FormatUnitName(name)
     local note, nameFound = self:GetNote(name)
     local rating = self:GetRating(nameFound)
@@ -239,7 +238,7 @@ function NotesDB:GetInfoForNameOrMain(name)
     -- If there is no note then check if this character has a main
     -- and if so if there is a note for that character.
     if not note then
-        if self.db.profile.useLibAlts == true and LibAlts and LibAlts.GetMain then
+        if D.db.profile.useLibAlts == true and LibAlts and LibAlts.GetMain then
             main = LibAlts:GetMain(name)
             if main and #main > 0 then
                 main = self:FormatUnitName(main)
@@ -259,12 +258,11 @@ function NotesDB:GetInfoForNameOrMain(name)
     return note, rating, main, nameFound
 end
 
-function NotesDB:OnInitialize(PlayerNotes)
+function NotesDb:OnInitialize(PlayerNotes)
     self.PlayerNotes = PlayerNotes
-    self.db = PlayerNotes.db
     self.playerRealm = _G.GetRealmName()
     self.playerRealmAbbr = self:FormatRealmName(self.playerRealm)
 end
 
-function NotesDB:OnEnable()
+function NotesDb:OnEnable()
 end

@@ -1,5 +1,11 @@
 # PlayerNotes
 
+## [1.1.0] (2019-11-12)
+- Code organization
+- General optimizations
+- Fixed import notes feature
+- Minor fixes and feature improvements
+
 ## [1.0.3] (2019-11-08)
 - Fix LFG applicant right click menu
 
