@@ -60,11 +60,6 @@ function P:OnInitialize()
     P:BuildTableData()
 
     -- Register the options table
-    --LibStub("AceConfig-3.0"):RegisterOptionsTable("PlayerNotes", P:GetOptions())
-    --self.optionsFrame = LibStub("AceConfigDialog-3.0"):AddToBlizOptions(
-    --    "PlayerNotes", Addon)
-
-    -- Register the options table
     local displayName = _G.GetAddOnMetadata(Addon, "Title")
     options = options or P:GetOptions(Addon)
     LibStub("AceConfigRegistry-3.0"):RegisterOptionsTable(displayName, options)
@@ -128,6 +123,8 @@ function P:OnInitialize()
     -- Hook any new temporary windows
     self:SecureHook("FCF_SetTemporaryWindowType")
     self:SecureHook("FCF_Close")
+
+    P:ChatMessage(GREEN_FONT_COLOR_CODE.."Loaded PlayerNotes " .. ADDON_VERSION .. ".")
 end
 
 function P:FCF_SetTemporaryWindowType(chatFrame, chatType, chatTarget)

@@ -161,3 +161,40 @@ function P:dump(o)
         return tostring(o)
     end
 end
+
+local function ElvUIDelayChatMessage(msg)
+    local E, L, V, P, G = unpack(ElvUI)
+    local C
+
+    if E then C = E:GetModule("Chat") end
+    if not C then return end
+
+    local delay, checks, delayFrame, chat = 0, 0, CreateFrame('Frame')
+
+    if C.Initialized then
+        DEFAULT_CHAT_FRAME:AddMessage(msg)
+    else
+        delayFrame:SetScript('OnUpdate', function(df, elapsed)
+            delay = delay + elapsed
+            if delay < 5 then return end
+
+            if C.Initialized then
+                DEFAULT_CHAT_FRAME:AddMessage(msg)
+                df:SetScript('OnUpdate', nil)
+            else
+                delay, checks = 0, checks + 1
+                if checks >= 5 then
+                    df:SetScript('OnUpdate', nil)
+                end
+            end
+        end)
+    end
+end
+
+function P:ChatMessage(msg)
+    if IsAddOnLoaded("ElvUI") then
+        ElvUIDelayChatMessage(msg)
+    else
+        DEFAULT_CHAT_FRAME:AddMessage(msg)
+    end
+end
