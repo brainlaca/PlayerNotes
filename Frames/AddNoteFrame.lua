@@ -2,6 +2,16 @@ local P, D, L = unpack(select(2, ...)); -- P: addon, D: data, L: locale
 
 local _G = _G
 
+local function SaveAddedNote(self, frame)
+    local rating = _G.UIDropDownMenu_GetSelectedValue(frame.ratingDropdown)
+
+    self:SendMessage('PN_EVENT_SAVENOTE', frame.charname:GetText(), frame.editbox:GetText(), rating)
+
+    frame.charname:SetText("")
+    frame.editbox:SetText("")
+    frame:Hide()
+end
+
 function P:CreateAddNoteFrame()
     local addwindow = _G.CreateFrame("Frame", "PlayerNotesAddWindow", _G.UIParent)
     addwindow:SetFrameStrata("DIALOG")
@@ -27,9 +37,7 @@ function P:CreateAddNoteFrame()
     savebutton:SetScript("OnClick",
         function(this)
             local frame = this:GetParent()
-            local rating = _G.UIDropDownMenu_GetSelectedValue(addwindow.ratingDropdown)
-            self:SendMessage('PN_EVENT_SAVENOTE', frame.charname:GetText(), frame.editbox:GetText(), rating)
-            frame:Hide()
+            SaveAddedNote(self, frame)
         end)
     addwindow.savebutton = savebutton
 
@@ -147,9 +155,7 @@ function P:CreateAddNoteFrame()
         editbox:SetScript("OnEnterPressed",
             function(this)
                 local frame = this:GetParent():GetParent()
-                local rating = _G.UIDropDownMenu_GetSelectedValue(addwindow.ratingDropdown)
-                self:SaveEditNote(frame.charname:GetText(), frame.editbox:GetText(), rating)
-                frame:Hide()
+                SaveAddedNote(self, frame)
             end)
     end
 

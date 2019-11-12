@@ -200,6 +200,11 @@ function NotesDb:SetRating(name, rating)
     end
 end
 
+function NotesDb:SetNoteAndRating(name, note, rating)
+    NotesDb:SetNote(name, note)
+    NotesDb:SetRating(name, rating)
+end
+
 function NotesDb:DeleteNote(name)
     if D.db.realm.notes and name then
         name = self:FormatUnitName(name)

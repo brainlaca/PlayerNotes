@@ -16,6 +16,7 @@ NotesDB.lua
 Util.lua
 Hook.lua
 LFG.lua
+Options.lua
 Frames\frames.xml
 Core.lua
 Skin.lua

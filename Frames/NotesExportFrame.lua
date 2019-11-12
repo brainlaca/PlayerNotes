@@ -23,15 +23,10 @@ local function escapeField(value, escapeChar)
 end
 
 local function GenerateNotesExport()
-    local notesExportText = ""
-
     local delimiter = ","
     local fields = {}
-    local quote = ""
+    local quote = "\""
     local rating
-    if D.db.profile.exportEscape == true then
-        quote = "\""
-    end
 
     for name, note in pairs(D.db.realm.notes) do
         wipe(fields)
@@ -52,8 +47,10 @@ local function GenerateNotesExport()
 
     -- Add a blank line so a final new line is added
     tinsert(notesExportBuffer, "")
-    notesExportText = tconcat(notesExportBuffer, "\n")
+
+    local notesExportText = tconcat(notesExportBuffer, "\n")
     wipe(notesExportBuffer)
+
     return notesExportText
 end
 
@@ -118,15 +115,6 @@ function P:ShowNotesExportFrame()
     optionsHeading:SetText("Options")
     optionsHeading:SetFullWidth(true)
     frame:AddChild(optionsHeading)
-
-    local escapeOption = AGU:Create("CheckBox")
-    escapeOption:SetLabel(L["NotesExport_Escape"])
-    escapeOption:SetCallback("OnValueChanged",
-        function(widget, event, value)
-            D.db.profile.exportEscape = value
-        end)
-    escapeOption:SetValue(D.db.profile.exportEscape)
-    frame:AddChild(escapeOption)
 
     local spacer = AGU:Create("Label")
     spacer:SetText(" ")
