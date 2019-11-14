@@ -635,13 +635,13 @@ function P:UnitPopup_ShowMenu(dropdownMenu, which, unit, name, userData, ...)
             noteButton = button
             noteButtonIndex = i
         end
-        if button.value == CANCEL then
+        if button.value == "CANCEL" then
             cancelButton = button
             cancelIndex = i
         end
     end
 
-    if noteButtonIndex > cancelIndex and noteButton and cancelButton then
+    if noteButtonIndex and cancelIndex and noteButtonIndex > cancelIndex and noteButton and cancelButton then
         local noteText, cancelText, noteValue, cancelValue
         -- this is a shitty workaround to let the cancel button be the last one
         -- if the notebutton is after the cancel, then swap their places

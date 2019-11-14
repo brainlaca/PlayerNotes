@@ -1,5 +1,8 @@
 # PlayerNotes
 
+## [1.1.2] (2019-11-14)
+- Dropdown fixes, round 2
+
 ## [1.1.1] (2019-11-14)
 - Dropdown fixes
 
