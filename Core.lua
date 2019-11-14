@@ -124,7 +124,8 @@ function P:OnInitialize()
     self:SecureHook("FCF_SetTemporaryWindowType")
     self:SecureHook("FCF_Close")
 
-    P:ChatMessage(GREEN_FONT_COLOR_CODE.."Loaded PlayerNotes " .. ADDON_VERSION .. ".")
+    P:ChatMessage(GREEN_FONT_COLOR_CODE.."Loaded PlayerNotes " .. ADDON_VERSION .. ". "
+        .. "Type '/notes help' to the show command line tools.")
 end
 
 function P:FCF_SetTemporaryWindowType(chatFrame, chatType, chatTarget)
