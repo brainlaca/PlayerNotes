@@ -1,8 +1,8 @@
 ### Player Notes
 
-Player Notes is a fork of Character Notes. (https://github.com/Talryn/CharacterNotes)
-
 Player Notes is a World of Warcraft addon that allows you to set and manage notes on other player's characters. Notes are stored per realm so notes are shared across your characters on a realm. Notes can be set on any character name. The notes are simple and generic and are not tied to a friend, an ignored character, etc.
+
+Player Notes is a fork of Character Notes. (https://github.com/Talryn/CharacterNotes)
 
 Notes are displayed:
 
