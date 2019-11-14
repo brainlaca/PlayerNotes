@@ -20,24 +20,20 @@ local function addEditNoteButton(menuArr, playerName)
     end
 
     if foundMenuIndex then
-        menuArr[foundMenuIndex] = {
-            ["arg1"] = playerName,
-            ["disabled"] = not playerName
-        }
+        menuArr[foundMenuIndex].arg1 = playerName
+        menuArr[foundMenuIndex].disabled = not playerName
     elseif cancelIndex then
-        menuArr[cancelIndex] = {
-            ["text"] = L["Edit Note"],
-            ["func"] = editLFGPlayerNote,
-            ["arg1"] = playerName,
-            ["disabled"] = not playerName,
-            ["notCheckable"] = true
-        }
+        menuArr[cancelIndex] = {}
+        menuArr[cancelIndex].text = L["Edit Note"]
+        menuArr[cancelIndex].func = editLFGPlayerNote
+        menuArr[cancelIndex].arg1 = playerName
+        menuArr[cancelIndex].disabled = not playerName
+        menuArr[cancelIndex].notCheckable = true
 
         cancelIndex = cancelIndex + 1
-        menuArr[cancelIndex] = {
-            ["text"] = CANCEL,
-            ["notCheckable"] = true
-        }
+        menuArr[cancelIndex] = {}
+        menuArr[cancelIndex].text = CANCEL
+        menuArr[cancelIndex].notCheckable = true
     end
 
     return menuArr;

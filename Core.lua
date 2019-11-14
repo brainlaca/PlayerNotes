@@ -575,16 +575,6 @@ function P:SetHyperlink(frame, link, ...)
 end
 
 function P:AddToUnitPopupMenu()
-    _G.UnitPopupButtons["CN_EDIT_NOTE"] = { text = L["Edit Note"] }
-
-    for menu, enabled in pairs(D.db.profile.menusToModify) do
-        if menu and enabled then
-            tinsert(_G.UnitPopupMenus[menu],
-                #_G.UnitPopupMenus[menu],
-                "CN_EDIT_NOTE")
-        end
-    end
-
     self:SecureHook("UnitPopup_ShowMenu")
 end
 
@@ -604,13 +594,75 @@ function P:RemoveFromUnitPopupMenu()
 end
 
 function P:UnitPopup_ShowMenu(dropdownMenu, which, unit, name, userData, ...)
+    if (_G.UIDROPDOWNMENU_MENU_LEVEL > 1) then return end
+
+    local menuFound
+    for menu, enabled in pairs(D.db.profile.menusToModify) do
+        if menu == which and enabled then
+            menuFound = true
+        end
+    end
+    if not menuFound then return end
+
+    local found
     for i = 1, _G.UIDROPDOWNMENU_MAXBUTTONS do
         local button = _G["DropDownList" .. _G.UIDROPDOWNMENU_MENU_LEVEL .. "Button" .. i]
         if button.value == "CN_EDIT_NOTE" then
+            found = true
+            button.owner = which
             button.arg1 = dropdownMenu
             button.arg2 = which
             button.func = P.EditNoteMenuClick
         end
+    end
+
+    if not found == true then
+        local info = UIDropDownMenu_CreateInfo()
+        info.text = L["Edit Note"]
+        info.owner = which
+        info.notCheckable = 1
+        info.func = P.EditNoteMenuClick
+        info.value = "CN_EDIT_NOTE"
+        info.arg1 = dropdownMenu
+        info.arg2 = which
+        UIDropDownMenu_AddButton(info)
+    end
+
+    local noteButton, noteButtonIndex, cancelButton, cancelIndex
+    for i = 1, _G.UIDROPDOWNMENU_MAXBUTTONS do
+        local button = _G["DropDownList" .. _G.UIDROPDOWNMENU_MENU_LEVEL .. "Button" .. i]
+        if button.value == "CN_EDIT_NOTE" then
+            noteButton = button
+            noteButtonIndex = i
+        end
+        if button.value == CANCEL then
+            cancelButton = button
+            cancelIndex = i
+        end
+    end
+
+    if noteButtonIndex > cancelIndex and noteButton and cancelButton then
+        local noteText, cancelText, noteValue, cancelValue
+        -- this is a shitty workaround to let the cancel button be the last one
+        -- if the notebutton is after the cancel, then swap their places
+        noteText = noteButton:GetText()
+        cancelText = cancelButton:GetText()
+        noteValue = noteButton.value
+        cancelValue = cancelButton.value
+
+        cancelButton.arg1 = noteButton.dropdownMenu
+        cancelButton.arg2 = noteButton.which
+        cancelButton.func = function()
+            P:EditNoteMenuClick(dropdownMenu, which)
+        end
+        cancelButton:SetText(noteText)
+        cancelButton.value = noteButton.value
+
+        noteButton.func = nil
+        noteButton.arg1 = nil
+        noteButton.arg2 = nil
+        noteButton:SetText(cancelText)
+        noteButton.value = cancelValue
     end
 end
 

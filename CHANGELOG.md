@@ -1,5 +1,8 @@
 # PlayerNotes
 
+## [1.1.1] (2019-11-14)
+- Dropdown fixes
+
 ## [1.1.0] (2019-11-12)
 - Code organization
 - General optimizations

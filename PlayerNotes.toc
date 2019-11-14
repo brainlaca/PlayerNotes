@@ -2,7 +2,7 @@
 ## Title: Player Notes
 ## Notes: Set and manage player notes that are displayed in unit tooltips.
 ## Author: Various Artists
-## Version: 1.1.0
+## Version: 1.1.1
 ## OptionalDeps: Ace3, LibDeformat-3.0, lib-st, LibDataBroker-1.1, LibDBIcon-1.0, LibAlts-1.0
 ## X-Embeds: Ace3
 ## X-Category: Interface Enhancements 
