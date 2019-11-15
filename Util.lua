@@ -169,11 +169,11 @@ local function ElvUIDelayChatMessage(msg)
     if E then C = E:GetModule("Chat") end
     if not C then return end
 
-    local delay, checks, delayFrame, chat = 0, 0, CreateFrame('Frame')
-
     if C.Initialized then
         DEFAULT_CHAT_FRAME:AddMessage(msg)
     else
+        local delay, checks, delayFrame, chat = 0, 0, CreateFrame('Frame')
+
         delayFrame:SetScript('OnUpdate', function(df, elapsed)
             delay = delay + elapsed
             if delay < 5 then return end
