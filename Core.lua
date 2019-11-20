@@ -125,7 +125,7 @@ function P:OnInitialize()
     self:SecureHook("FCF_Close")
 
     P:ChatMessage(GREEN_FONT_COLOR_CODE.."Loaded PlayerNotes " .. ADDON_VERSION .. ". "
-        .. "Type '/notes help' to the show command line tools.")
+        .. "Type '/notes help' to show the command line tools.")
 end
 
 function P:FCF_SetTemporaryWindowType(chatFrame, chatType, chatTarget)
@@ -618,7 +618,17 @@ function P:UnitPopup_ShowMenu(dropdownMenu, which, unit, name, userData, ...)
     end
 
     if not found == true then
-        local info = UIDropDownMenu_CreateInfo()
+        local info
+
+        info = UIDropDownMenu_CreateInfo()
+        UIDropDownMenu_AddSeparator(1)
+        info.text = "PlayerNotes"
+        info.owner = which
+        info.isTitle = true
+        info.notCheckable = true
+        UIDropDownMenu_AddButton(info)
+
+        info = UIDropDownMenu_CreateInfo()
         info.text = L["Edit Note"]
         info.owner = which
         info.notCheckable = 1
@@ -627,43 +637,6 @@ function P:UnitPopup_ShowMenu(dropdownMenu, which, unit, name, userData, ...)
         info.arg1 = dropdownMenu
         info.arg2 = which
         UIDropDownMenu_AddButton(info)
-    end
-
-    local noteButton, noteButtonIndex, cancelButton, cancelIndex
-    for i = 1, _G.UIDROPDOWNMENU_MAXBUTTONS do
-        local button = _G["DropDownList" .. _G.UIDROPDOWNMENU_MENU_LEVEL .. "Button" .. i]
-        if button.value == "CN_EDIT_NOTE" then
-            noteButton = button
-            noteButtonIndex = i
-        end
-        if button.value == "CANCEL" then
-            cancelButton = button
-            cancelIndex = i
-        end
-    end
-
-    if noteButtonIndex and cancelIndex and noteButtonIndex > cancelIndex and noteButton and cancelButton then
-        local noteText, cancelText, noteValue, cancelValue
-        -- this is a shitty workaround to let the cancel button be the last one
-        -- if the notebutton is after the cancel, then swap their places
-        noteText = noteButton:GetText()
-        cancelText = cancelButton:GetText()
-        noteValue = noteButton.value
-        cancelValue = cancelButton.value
-
-        cancelButton.arg1 = noteButton.dropdownMenu
-        cancelButton.arg2 = noteButton.which
-        cancelButton.func = function()
-            P:EditNoteMenuClick(dropdownMenu, which)
-        end
-        cancelButton:SetText(noteText)
-        cancelButton.value = noteButton.value
-
-        noteButton.func = nil
-        noteButton.arg1 = nil
-        noteButton.arg2 = nil
-        noteButton:SetText(cancelText)
-        noteButton.value = cancelValue
     end
 end
 
