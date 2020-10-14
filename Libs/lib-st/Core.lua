@@ -115,7 +115,7 @@ do
 		for i = 1, num do
 			local row = self.rows[i];
 			if not row then
-				row = CreateFrame("Button", self.frame:GetName().."Row"..i, self.frame);
+				row = CreateFrame("Button", self.frame:GetName().."Row"..i, self.frame, "BackdropTemplate");
 				self.rows[i] = row;
 				if i > 1 then
 					row:SetPoint("TOPLEFT", self.rows[i-1], "BOTTOMLEFT", 0, 0);
@@ -133,7 +133,7 @@ do
 			for j = 1, #self.cols do
 				local col = row.cols[j];
 				if not col then
-					col = CreateFrame("Button", row:GetName().."col"..j, row);
+					col = CreateFrame("Button", row:GetName().."col"..j, row, "BackdropTemplate");
 					col.text = row:CreateFontString(col:GetName().."text", "OVERLAY", "GameFontHighlightSmall");
 					row.cols[j] = col;
 					local align = self.cols[j].align or "LEFT";
@@ -191,7 +191,7 @@ do
 
 		local row = self.head
 		if not row then
-			row = CreateFrame("Frame", self.frame:GetName().."Head", self.frame);
+			row = CreateFrame("Frame", self.frame:GetName().."Head", self.frame, "BackdropTemplate");
 			row:SetPoint("BOTTOMLEFT", self.frame, "TOPLEFT", 4, 0);
 			row:SetPoint("BOTTOMRIGHT", self.frame, "TOPRIGHT", -4, 0);
 			row:SetHeight(self.rowHeight);
@@ -216,7 +216,7 @@ do
 			local colFrameName = row:GetName().."Col"..i;
 			local col = getglobal(colFrameName);
 			if not col then
-				col = CreateFrame("Button", colFrameName, row);
+				col = CreateFrame("Button", colFrameName, row, "BackdropTemplate");
 				col:RegisterForClicks("AnyUp");	 -- LS: right clicking on header
 
 				if self.events then
@@ -621,7 +621,7 @@ do
 	function lib:CreateST(cols, numRows, rowHeight, highlight, parent)
 		local st = {};
 		self.framecount = self.framecount or 1;
-		local f = CreateFrame("Frame", "ScrollTable" .. self.framecount, parent or UIParent);
+		local f = CreateFrame("Frame", "ScrollTable" .. self.framecount, parent or UIParent, "BackdropTemplate");
 		self.framecount = self.framecount + 1;
 		st.showing = true;
 		st.frame = f;

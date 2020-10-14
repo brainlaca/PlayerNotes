@@ -13,7 +13,7 @@ local function SaveAddedNote(self, frame)
 end
 
 function P:CreateAddNoteFrame()
-    local addwindow = _G.CreateFrame("Frame", "PlayerNotesAddWindow", _G.UIParent)
+    local addwindow = _G.CreateFrame("Frame", "PlayerNotesAddWindow", _G.UIParent, "BackdropTemplate")
     addwindow:SetFrameStrata("DIALOG")
     addwindow:SetToplevel(true)
     addwindow:SetWidth(400)
@@ -101,7 +101,7 @@ function P:CreateAddNoteFrame()
     _G.UIDropDownMenu_JustifyText(ratingDropdown, "LEFT")
     addwindow.ratingdropdown = ratingDropdown
 
-    local editBoxContainer = _G.CreateFrame("Frame", nil, addwindow)
+    local editBoxContainer = _G.CreateFrame("Frame", nil, addwindow, "BackdropTemplate")
     editBoxContainer:SetPoint("TOPLEFT", addwindow, "TOPLEFT", 20, -150)
     editBoxContainer:SetPoint("BOTTOMRIGHT", addwindow, "BOTTOMRIGHT", -40, 50)
     editBoxContainer:SetBackdrop({
@@ -119,7 +119,7 @@ function P:CreateAddNoteFrame()
     scrollArea:SetPoint("TOPLEFT", editBoxContainer, "TOPLEFT", 6, -6)
     scrollArea:SetPoint("BOTTOMRIGHT", editBoxContainer, "BOTTOMRIGHT", -6, 6)
 
-    local editbox = _G.CreateFrame("EditBox", "CN_EditNote_EditBox", addwindow)
+    local editbox = _G.CreateFrame("EditBox", "CN_EditNote_EditBox", addwindow, "BackdropTemplate")
     editbox:SetFontObject(_G.ChatFontNormal)
     editbox:SetMultiLine(true)
     editbox:SetAutoFocus(true)

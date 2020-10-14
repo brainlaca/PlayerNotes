@@ -29,7 +29,7 @@ do
             local fullName, faction, level
 
             if self.buttonType == FRIENDS_BUTTON_TYPE_BNET then
-                local bnetIDAccount = BNGetFriendInfo(self.id)
+                local bnetIDAccount = C_FriendList.GetFriendInfoByIndex(self.id)
                 if bnetIDAccount then
                     fullName, faction, level = P:GetNameAndRealmForBNetFriend(bnetIDAccount)
                 end

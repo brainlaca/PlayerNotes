@@ -10,7 +10,7 @@ do
     end
 
     -- copied over from elvui, needed to override as text alignment can mess up the dropdown field
-    local function HandleDropDown(frame, width, pos)
+    local function HandleDropDownBox(frame, width, pos)
         local frameName = frame.GetName and frame:GetName()
         local button = frame.Button or frameName and (_G[frameName.."Button"] or _G[frameName.."_Button"])
         local text = frameName and _G[frameName.."Text"] or frame.Text
@@ -64,7 +64,7 @@ do
                 if frameName == "PlayerNotesWindow" then
                     frame:SetTemplate("Transparent")
                 else
-                    frame:SetTemplate(nil, true)
+                    frame:SetTemplate("Default", true)
                 end
             end
 
@@ -89,7 +89,7 @@ do
             -- dropdown
             local ratingdropdown = frame.ratingdropdown
             if ratingdropdown then
-                HandleDropDown(ratingdropdown)
+                HandleDropDownBox(ratingdropdown)
             end
 
             -- scrolltable
@@ -178,7 +178,7 @@ do
                 if frameName == "PlayerNotesWindow" or not child then
                     frame:SetTemplate("Transparent")
                 else
-                    frame:SetTemplate(nil, true)
+                    frame:SetTemplate("Default", true)
                 end
             end
     end

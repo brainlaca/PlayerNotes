@@ -420,7 +420,7 @@ function P:EditNoteHandler(input, child)
             editwindow.removeButton:Enable()
         end
 
-        P:ReskinFrame(editwindow, child)
+        -- P:ReskinFrame(editwindow, child)
         editwindow:Show()
         editwindow:Raise()
 
@@ -439,7 +439,7 @@ function P:AddNoteHandler(child)
     addwindow.charname:SetText("")
     addwindow.editbox:SetText("")
 
-    P:ReskinFrame(addwindow, child)
+    -- P:ReskinFrame(addwindow, child)
     addwindow:Show()
     addwindow:Raise()
 

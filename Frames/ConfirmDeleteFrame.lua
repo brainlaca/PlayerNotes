@@ -4,7 +4,7 @@ local N = D.NotesDb
 local _G = _G
 
 function P:CreateConfirmDeleteFrame()
-    local deletewindow = _G.CreateFrame("Frame", "PlayerNotesConfirmDeleteWindow", _G.UIParent)
+    local deletewindow = _G.CreateFrame("Frame", "PlayerNotesConfirmDeleteWindow", _G.UIParent, "BackdropTemplate")
     deletewindow:SetFrameStrata("DIALOG")
     deletewindow:SetToplevel(true)
     deletewindow:SetWidth(400)

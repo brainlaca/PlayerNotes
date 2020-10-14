@@ -27,7 +27,7 @@ local function GetRatingImage(rating)
 end
 
 function P:CreateNotesFrame()
-    local noteswindow = _G.CreateFrame("Frame", "PlayerNotesWindow", _G.UIParent)
+    local noteswindow = _G.CreateFrame("Frame", "PlayerNotesWindow", _G.UIParent, "BackdropTemplate")
     noteswindow:SetFrameStrata("DIALOG")
     noteswindow:SetToplevel(true)
     noteswindow:SetWidth(630)
