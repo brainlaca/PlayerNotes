@@ -95,33 +95,43 @@ function P:Wrap(str, limit, indent, indent1, offset)
         end)
 end
 
-function P:GetNameAndRealmForBNetFriend(bnetIDAccount)
-    local index = BNGetFriendIndex(bnetIDAccount)
-    if index then
-        local numGameAccounts = BNGetNumFriendGameAccounts(index)
-        for i = 1, numGameAccounts do
-            local _, characterName, client, realmName, _, faction, _, _, _, _, level = BNGetFriendGameAccountInfo(index, i)
-            if client == BNET_CLIENT_WOW then
-                if realmName then
-                    characterName = characterName .. "-" .. realmName:gsub("%s+", "")
-                end
-                return characterName, FACTION[faction], tonumber(level)
-            end
-        end
+function P:IsMaxLevel(level, fallback)
+    if level and type(level) == "number" then
+        return level >= D.MAX_LEVEL
     end
+    return fallback
 end
 
-function P:GetNameRealmForBNetFriend(bnetIDAccount)
+function P:GetNameRealmForBNetFriend(bnetIDAccount, separateRealmName)
     local index = BNGetFriendIndex(bnetIDAccount)
-    if index then
-        local numGameAccounts = BNGetNumFriendGameAccounts(index)
-        for i = 1, numGameAccounts do
-            local _, characterName, client, realmName, _, faction, _, _, _, _, level = BNGetFriendGameAccountInfo(index, i)
-            if client == BNET_CLIENT_WOW then
-                return characterName, realmName
+    if not index then
+        return
+    end
+    local collection = {}
+    local collectionIndex = 0
+    for i = 1, C_BattleNet.GetFriendNumGameAccounts(index), 1 do
+        local accountInfo = C_BattleNet.GetFriendGameAccountInfo(index, i)
+        local realmName = ""
+        if accountInfo and accountInfo.clientProgram == BNET_CLIENT_WOW and (not accountInfo.wowProjectID or accountInfo.wowProjectID ~= WOW_PROJECT_CLASSIC) then
+            if accountInfo.realmName then
+                realmName = accountInfo.realmName:gsub("%s+", "")
             end
+            collectionIndex = collectionIndex + 1
+            collection[collectionIndex] = {accountInfo.characterName, realmName, D.FACTION_TO_ID[accountInfo.factionName], tonumber(accountInfo.characterLevel)}
         end
     end
+
+    for i = 1, collectionIndex do
+        local profile = collection[collectionIndex]
+        local name, realmName, faction, level = profile[1], profile[2], profile[3], profile[4]
+        if separateRealmName then
+            return name, realmName, faction, level
+        else
+            return name .. "-" .. realmName, faction, level
+        end
+    end
+
+    return
 end
 
 function P:GetNameAndRealm(arg1, arg2)

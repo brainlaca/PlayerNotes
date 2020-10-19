@@ -645,7 +645,7 @@ function P:EditNoteMenuClick(dropdownMenu, which)
     local name, realm, unit
 
     if which == "BN_FRIEND" and menu.accountInfo and menu.accountInfo.bnetAccountID then
-        name, realm = P:GetNameRealmForBNetFriend(menu.accountInfo.bnetAccountID)
+        name, realm = P:GetNameRealmForBNetFriend(menu.accountInfo.bnetAccountID, true)
     else
         local dropdownFullName
         if dropdownMenu.name then

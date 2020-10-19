@@ -31,7 +31,7 @@ do
             if self.buttonType == FRIENDS_BUTTON_TYPE_BNET then
                 local bnetIDAccount = C_FriendList.GetFriendInfoByIndex(self.id)
                 if bnetIDAccount then
-                    fullName, faction, level = P:GetNameAndRealmForBNetFriend(bnetIDAccount)
+                    fullName, faction, level = P:GetNameRealmForBNetFriend(bnetIDAccount)
                 end
             elseif self.buttonType == FRIENDS_BUTTON_TYPE_WOW then
                 fullName, level = GetFriendInfo(self.id)

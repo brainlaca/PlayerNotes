@@ -37,6 +37,9 @@ D.chatNoteWithMainFormat = "%s%s (%s): " .. D.WHITE .. "%s" .. "|r"
 D.tooltipNoteFormat = "%s" .. L["Note: "] .. D.WHITE .. "%s" .. "|r"
 D.tooltipNoteWithMainFormat = "%s" .. L["Note"] .. " (%s): " .. D.WHITE .. "%s" .. "|r"
 
+D.MAX_LEVEL = GetMaxLevelForExpansionLevel(GetExpansionLevel())
+D.FACTION_TO_ID = {Alliance = 1, Horde = 2, Neutral = 3}
+
 D.defaults = {
     profile = {
         minimap = {
