@@ -20,7 +20,6 @@ do
         PLAYER = true,
         RAID = true,
         RAID_PLAYER = true,
-        SELF = true,
         TARGET = true,
         WORLD_STATE_SCORE = true
     }
