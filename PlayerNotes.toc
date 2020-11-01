@@ -15,7 +15,7 @@ PlayerNotes.lua
 NotesDB.lua
 Util.lua
 Hook.lua
-LFG.lua
+DropDown.lua
 Options.lua
 Frames\frames.xml
 Core.lua

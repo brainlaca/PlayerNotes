@@ -159,6 +159,24 @@ function P:GetNameAndRealm(arg1, arg2)
     return name, realm, unit
 end
 
+function P:GetNameRealmFromPlayerLink(playerLink)
+    local linkString, linkText = LinkUtil.SplitLink(playerLink)
+    local linkType, linkData = ExtractLinkData(linkString)
+    if linkType == "player" then
+        return P:GetNameRealm(linkData)
+    elseif linkType == "BNplayer" then
+        local _, bnetIDAccount = strsplit(":", linkData)
+        if bnetIDAccount then
+            bnetIDAccount = tonumber(bnetIDAccount)
+        end
+        if bnetIDAccount then
+            local fullName, _, level = P:GetNameRealmForBNetFriend(bnetIDAccount)
+            local name, realm = P:GetNameRealm(fullName)
+            return name, realm, level
+        end
+    end
+end
+
 function P:dump(o)
     if type(o) == 'table' then
         local s = '{ '

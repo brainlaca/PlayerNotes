@@ -512,168 +512,11 @@ function P:OnEnable()
         notesFrame, editNoteFrame, addNoteFrame, confirmDeleteFrame
     });
 
-    -- Add the Edit Note menu item on unit frames
-    P:AddToUnitPopupMenu()
-
-    -- Enable note links
-    P:EnableNoteLinks()
-
     playerName = _G.GetUnitName("player", true)
 end
 
-function P:EnableNoteLinks()
-    if D.db.profile.noteLinksInChat then
-        -- Hook SetItemRef to create our own hyperlinks
-        if not self:IsHooked(nil, "SetItemRef") then
-            self:RawHook(nil, "SetItemRef", true)
-        end
-        -- Hook SetHyperlink so we can redirect charnote links
-        if not self:IsHooked(_G.ItemRefTooltip, "SetHyperlink") then
-            self:RawHook(_G.ItemRefTooltip, "SetHyperlink", true)
-        end
-        -- Hook chat frames so we can edit the messages
-        self:HookChatFrames()
-    end
-end
-
-function P:DisableNoteLinks()
-    self:Unhook(nil, "SetItemRef")
-    self:Unhook(_G.ItemRefTooltip, "SetHyperlink")
-    self:UnhookChatFrames()
-end
-
 function P:OnDisable()
-    -- Called when the addon is disabled
-    P:UnregisterEvent("CHAT_MSG_SYSTEM")
-    P:UnregisterEvent("GROUP_ROSTER_UPDATE")
-
-    -- Remove the menu items
-    P:RemoveFromUnitPopupMenu()
-end
-
-function P:SetItemRef(link, text, button, ...)
-    if link and link:match("^charnote:") then
-        local name = sub(link, 10)
-        name = N:FormatUnitName(name)
-        local note, nameFound = N:GetNote(name)
-        -- Display a link
-        _G.ShowUIPanel(charNoteTooltip)
-        if (not charNoteTooltip:IsVisible()) then
-            charNoteTooltip:SetOwner(_G.UIParent, "ANCHOR_PRESERVE")
-        end
-        charNoteTooltip:ClearLines()
-        charNoteTooltip:AddLine(nameFound, 1, 1, 0)
-        charNoteTooltip:AddLine(note or "", 1, 1, 1, true)
-        charNoteTooltip:SetBackdropBorderColor(1, 1, 1, 1)
-        charNoteTooltip:Show()
-        return nil
-    end
-    return self.hooks.SetItemRef(link, text, button, ...)
-end
-
-function P:SetHyperlink(frame, link, ...)
-    if link and link:match("^charnote:") then return end
-    return self.hooks[frame].SetHyperlink(frame, link, ...)
-end
-
-function P:AddToUnitPopupMenu()
-    self:SecureHook("UnitPopup_ShowMenu")
-end
-
-function P:RemoveFromUnitPopupMenu()
-    self:Unhook("UnitPopup_ShowMenu")
-
-    for menu in pairs(_G.UnitPopupMenus) do
-        for i = #_G.UnitPopupMenus[menu], 1, -1 do
-            if _G.UnitPopupMenus[menu][i] == "CN_EDIT_NOTE" then
-                tremove(_G.UnitPopupMenus[menu], i)
-                break
-            end
-        end
-    end
-
-    _G.UnitPopupButtons["CN_EDIT_NOTE"] = nil
-end
-
-function P:UnitPopup_ShowMenu(dropdownMenu, which, unit, name, userData, ...)
-    if (_G.UIDROPDOWNMENU_MENU_LEVEL > 1) then return end
-
-    local menuFound
-    for menu, enabled in pairs(D.db.profile.menusToModify) do
-        if menu == which and enabled then
-            menuFound = true
-        end
-    end
-    if not menuFound then return end
-
-    local found
---    for i = 1, _G.UIDROPDOWNMENU_MAXBUTTONS do
---        local button = _G["DropDownList" .. _G.UIDROPDOWNMENU_MENU_LEVEL .. "Button" .. i]
---        if button.value == "CN_EDIT_NOTE" then
---            DEFAULT_CHAT_FRAME:AddMessage("found " .. button.value)
---            DEFAULT_CHAT_FRAME:AddMessage(button.arg2)
---            found = true
---            button.owner = which
---            button.arg1 = dropdownMenu
---            button.arg2 = which
---            button.func = P.EditNoteMenuClick
---        end
---    end
-
-    if not found then
-        local info
-
-        info = UIDropDownMenu_CreateInfo()
-        UIDropDownMenu_AddSeparator(1)
-        info.text = "PlayerNotes"
-        info.owner = which
-        info.isTitle = true
-        info.notCheckable = true
-        UIDropDownMenu_AddButton(info)
-
-        info = UIDropDownMenu_CreateInfo()
-        info.text = L["Edit Note"]
-        info.owner = which
-        info.notCheckable = 1
-        info.func = P.EditNoteMenuClick
-        info.value = "CN_EDIT_NOTE"
-        info.arg1 = dropdownMenu
-        info.arg2 = which
-        UIDropDownMenu_AddButton(info)
-    end
-end
-
-function P:EditNoteMenuClick(dropdownMenu, which)
-    local menu = _G.UIDROPDOWNMENU_INIT_MENU
-    local name, realm, unit
-
-    if which == "BN_FRIEND" and menu.accountInfo and menu.accountInfo.bnetAccountID then
-        name, realm = P:GetNameRealmForBNetFriend(menu.accountInfo.bnetAccountID, true)
-    else
-        local dropdownFullName
-        if dropdownMenu.name then
-            if dropdownMenu.server and not dropdownMenu.name:find("-") then
-                dropdownFullName = dropdownMenu.name .. "-" .. dropdownMenu.server
-            else
-                dropdownFullName = dropdownMenu.name
-            end
-        end
-
-        name, realm, unit = P:GetNameAndRealm(dropdownMenu.chatTarget or dropdownFullName)
-    end
-
-    local fullname = N:FormatNameWithRealm(name, realm)
-    if not fullname then
-        print("Player not found/not logged in.")
-        return
-    end
-
-    if D.db.profile.debug then
-        local strFormat = "Menu Click: %s - %s -> %s"
-        P:Print(strFormat:format(_G.tostring(name), _G.tostring(realm),
-            _G.tostring(fullname)))
-    end
-    P:EditNoteHandler(fullname)
+    return
 end
 
 function P:IsNotesVisible()
@@ -737,26 +580,6 @@ function P:GetRatingColorForPlayer(name)
 
     local rating = N:GetRating(nameFound)
     return P:GetRatingColor(rating)
-end
-
-function P:HookChatFrames()
-    for i = 1, _G.NUM_CHAT_WINDOWS do
-        local chatFrame = _G["ChatFrame" .. i]
-        if chatFrame ~= _G.COMBATLOG then
-            if not self:IsHooked(chatFrame, "AddMessage") then
-                self:RawHook(chatFrame, "AddMessage", true)
-            end
-        end
-    end
-end
-
-function P:UnhookChatFrames()
-    for i = 1, _G.NUM_CHAT_WINDOWS do
-        local chatFrame = _G["ChatFrame" .. i]
-        if chatFrame ~= _G.COMBATLOG then
-            self:Unhook(chatFrame, "AddMessage")
-        end
-    end
 end
 
 local noteLinkFmt = "%s|Hcharnote:%s|h[%s]|h|r"
@@ -867,8 +690,6 @@ function P:GROUP_ROSTER_UPDATE(event, message)
 end
 
 function P:ADDON_LOADED(event, name)
-    -- update after every addon load to make sure nothing removes the menu item
-    P:updateLFGDropDowns()
     P:LoadModules()
 end
 
