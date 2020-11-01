@@ -5,12 +5,12 @@ local LibStub = _G.LibStub
 local PlayerNotes = LibStub("AceAddon-3.0"):NewAddon(Addon, "AceConsole-3.0", "AceHook-3.0", "AceEvent-3.0", "AceTimer-3.0")
 local D = {}
 local L = LibStub("AceLocale-3.0"):GetLocale(Addon, true)
+_G.PlayerNotes = PlayerNotes
 
 -- Extra data
 D.noteLDB = nil
 D.notesData = {}
 D.config = nil
-D.uiHooks = {}
 D.options = {}
 
 -- Colors

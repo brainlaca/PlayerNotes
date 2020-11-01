@@ -37,11 +37,12 @@ D.notesImportFrame = nil
 local options
 local previousGroup = {}
 local playerName = _G.GetUnitName("player", true)
-local uiHooks = {}
 
 local RATING_COL = 1
 local NAME_COL = 2
 local NOTE_COL = 3
+
+local loadingAgainSoon
 
 function P:ShowOptions()
     _G.InterfaceOptionsFrame_OpenToCategory(self.optionsFrame.Main)
@@ -476,6 +477,7 @@ function P:OnEnable()
     -- Register for party and raid roster updates
     self:RegisterEvent("GROUP_ROSTER_UPDATE")
     self:RegisterEvent("ADDON_LOADED")
+    self:RegisterEvent("PLAYER_ENTERING_WORLD")
 
     -- Create the Notes frame for later use
     notesFrame = P:CreateNotesFrame()
@@ -517,7 +519,6 @@ function P:OnEnable()
     P:EnableNoteLinks()
 
     playerName = _G.GetUnitName("player", true)
-    P:ApplyHooks()
 end
 
 function P:EnableNoteLinks()
@@ -606,18 +607,20 @@ function P:UnitPopup_ShowMenu(dropdownMenu, which, unit, name, userData, ...)
     if not menuFound then return end
 
     local found
-    for i = 1, _G.UIDROPDOWNMENU_MAXBUTTONS do
-        local button = _G["DropDownList" .. _G.UIDROPDOWNMENU_MENU_LEVEL .. "Button" .. i]
-        if button.value == "CN_EDIT_NOTE" then
-            found = true
-            button.owner = which
-            button.arg1 = dropdownMenu
-            button.arg2 = which
-            button.func = P.EditNoteMenuClick
-        end
-    end
+--    for i = 1, _G.UIDROPDOWNMENU_MAXBUTTONS do
+--        local button = _G["DropDownList" .. _G.UIDROPDOWNMENU_MENU_LEVEL .. "Button" .. i]
+--        if button.value == "CN_EDIT_NOTE" then
+--            DEFAULT_CHAT_FRAME:AddMessage("found " .. button.value)
+--            DEFAULT_CHAT_FRAME:AddMessage(button.arg2)
+--            found = true
+--            button.owner = which
+--            button.arg1 = dropdownMenu
+--            button.arg2 = which
+--            button.func = P.EditNoteMenuClick
+--        end
+--    end
 
-    if not found == true then
+    if not found then
         local info
 
         info = UIDropDownMenu_CreateInfo()
@@ -709,6 +712,31 @@ function P:DisplayNote(name, type)
             self:Print(D.chatNoteFormat:format(P:GetRatingColor(rating), nameFound, note))
         end
     end
+end
+
+function P:GetNoteForPlayer(name)
+    local pName, realm, unit = P:GetNameAndRealm(name)
+    name = N:FormatUnitName(pName .. "-" .. realm)
+
+    local note, _ = N:GetNote(name)
+    if note then
+        return note
+    end
+
+    return nil
+end
+
+function P:GetRatingColorForPlayer(name)
+    local pName, realm, unit = P:GetNameAndRealm(name)
+    name = N:FormatUnitName(pName .. "-" .. realm)
+
+    local note, nameFound = N:GetNote(name)
+    if not nameFound then
+        return
+    end
+
+    local rating = N:GetRating(nameFound)
+    return P:GetRatingColor(rating)
 end
 
 function P:HookChatFrames()
@@ -838,18 +866,36 @@ function P:GROUP_ROSTER_UPDATE(event, message)
     P:ProcessGroupRosterUpdate()
 end
 
-function P:ApplyHooks()
-    local uiHooks = D.uiHooks
-
-    for i = #uiHooks, 1, -1 do
-        local func = uiHooks[i]
-        if func() then
-            table.remove(uiHooks, i)
-        end
-    end
-end
-
 function P:ADDON_LOADED(event, name)
     -- update after every addon load to make sure nothing removes the menu item
     P:updateLFGDropDowns()
+    P:LoadModules()
+end
+
+function P:PLAYER_ENTERING_WORLD(event, name)
+    P:LoadModules()
+end
+
+function P:LoadModules()
+    local modules = P:GetModules()
+    local numLoaded = 0
+    local numPending = 0
+
+    for _, module in ipairs(modules) do
+        if not module:IsLoaded() and module:CanLoad() then
+            if module:HasDependencies() then
+                numLoaded = numLoaded + 1
+                module:Load()
+            else
+                numPending = numPending + 1
+            end
+        end
+    end
+    if not loadingAgainSoon and numLoaded > 0 and numPending > 0 then
+        loadingAgainSoon = true
+        C_Timer.After(1, function()
+            loadingAgainSoon = false
+            P:LoadModules()
+        end)
+    end
 end
