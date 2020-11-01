@@ -690,6 +690,7 @@ function P:GROUP_ROSTER_UPDATE(event, message)
 end
 
 function P:ADDON_LOADED(event, name)
+    -- because of blizzard ui addon dependencies retry loading not-yet-loaded modules whenever an addon is loaded
     P:LoadModules()
 end
 
