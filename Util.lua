@@ -95,13 +95,6 @@ function P:Wrap(str, limit, indent, indent1, offset)
         end)
 end
 
-function P:IsMaxLevel(level, fallback)
-    if level and type(level) == "number" then
-        return level >= D.MAX_LEVEL
-    end
-    return fallback
-end
-
 function P:GetNameRealmForBNetFriend(bnetIDAccount, separateRealmName)
     local index = BNGetFriendIndex(bnetIDAccount)
     if not index then
@@ -404,8 +397,8 @@ do
     ---@param id string @Unique module ID reference.
     ---@param data Module @Optional table with properties to copy into the newly created module.
     function P:NewModule(id, data)
-        assert(type(id) == "string", "Raider.IO Module expects NewModule(id[, data]) where id is a string, data is optional table.")
-        assert(not modules[id], "Raider.IO Module expects NewModule(id[, data]) where id is a string, that is unique and not already taken.")
+        assert(type(id) == "string", "Module expects NewModule(id[, data]) where id is a string, data is optional table.")
+        assert(not modules[id], "Module expects NewModule(id[, data]) where id is a string, that is unique and not already taken.")
         ---@type Module
         local m = {}
         for k, v in pairs(module) do
@@ -447,13 +440,13 @@ do
     ---@param id string @Unique module ID reference.
     ---@param silent boolean @Ommit to throw if module doesn't exists.
     function P:GetModule(id, silent)
-        assert(type(id) == "string", "Raider.IO Module expects GetModule(id) where id is a string.")
+        assert(type(id) == "string", "Module expects GetModule(id) where id is a string.")
         for _, module in pairs(modules) do
             if module.id == id then
                 return module
             end
         end
-        assert(silent, "Raider.IO Module expects GetModule(id) where id is a string, and the module must exists, or the silent param must be set to avoid this throw.")
+        assert(silent, "Module expects GetModule(id) where id is a string, and the module must exists, or the silent param must be set to avoid this throw.")
     end
 
 end

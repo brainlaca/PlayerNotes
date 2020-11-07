@@ -26,17 +26,25 @@ Additional Features:
 
 * LibAlt integration. See below. 
 
+Weakauras:
+
+* Created a weakaura that indicates in the LFG window whether a note is set for:
+    * The leader of the group in the group search view
+    * The applicants in the applicant view
+
+* Get it here: https://wago.io/OkztQKJ8H
+
 Command-line options:
 
-    /notes - Brings up the GUI
-    /searchnote <search term> - Brings up the GUI. Optional search term allows filtering the list of notes.
-    /setnote <name> <note> Sets a note for the character name specified.
-    /delnote <name> Deletes the note for the character name specified.
-    /getnote <name> Prints the note for the character name specified.
-    /editnote <name> Brings up a window to edit the note for the name specified or your target if no name if specified. 
+    /pn - Brings up the GUI
+    /searchpn <search term> - Brings up the GUI. Optional search term allows filtering the list of notes.
+    /setpn <name> <note> Sets a note for the character name specified.
+    /delpn <name> Deletes the note for the character name specified.
+    /getpn <name> Prints the note for the character name specified.
+    /editpn <name> Brings up a window to edit the note for the name specified or your target if no name if specified. 
 
 Player Notes can use LibAlts to get main-alt information. If no note is found for a character but one is found for the main of that character, it will display the note for the main.
 
-Notes can be stored for characters not from your server but you'll need to use /editnote or the "Edit Note" menu item due to the spaces in the name (from the server name added at the end).
+Notes can be stored for characters not from your server but you'll need to use /editpn or the "Edit Note" menu item due to the spaces in the name (from the server name added at the end).
 
 Note Links will add a hyperlink in chat next to any player name that you have set a note for. Clicking the "note" link will display the note in a tooltip.

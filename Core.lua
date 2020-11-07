@@ -29,7 +29,6 @@ local notesFrame = nil
 local editNoteFrame = nil
 local addNoteFrame = nil
 local confirmDeleteFrame = nil
-local charNoteTooltip = nil
 
 D.notesExportFrame = nil
 D.notesImportFrame = nil
@@ -69,17 +68,17 @@ function P:OnInitialize()
     self.optionsFrame.Main = ACD:AddToBlizOptions(displayName, displayName, nil, "core")
     self.optionsFrame.Notes = ACD:AddToBlizOptions(displayName, L["Import/Export"], displayName, "export")
 
-    P:RegisterChatCommand("setnote", "SetNoteHandler")
-    P:RegisterChatCommand("delnote", "DelNoteHandler")
-    P:RegisterChatCommand("delrating", "DelRatingHandler")
-    P:RegisterChatCommand("getnote", "GetNoteHandler")
-    P:RegisterChatCommand("editnote", "EditNoteHandler")
-    P:RegisterChatCommand("notes", "NotesHandler")
-    P:RegisterChatCommand("notesoptions", "NotesOptionsHandler")
-    P:RegisterChatCommand("searchnote", "NotesHandler")
-    P:RegisterChatCommand("notesexport", "NotesExportHandler")
-    P:RegisterChatCommand("notesimport", "NotesImportHandler")
-    P:RegisterChatCommand("notesdbcheck", "NotesDBCheckHandler")
+    P:RegisterChatCommand("setpn", "SetNoteHandler")
+    P:RegisterChatCommand("delpn", "DelNoteHandler")
+    P:RegisterChatCommand("delpr", "DelRatingHandler")
+    P:RegisterChatCommand("getpn", "GetNoteHandler")
+    P:RegisterChatCommand("editpn", "EditNoteHandler")
+    P:RegisterChatCommand("pn", "NotesHandler")
+    P:RegisterChatCommand("pnoptions", "NotesOptionsHandler")
+    P:RegisterChatCommand("searchpn", "NotesHandler")
+    P:RegisterChatCommand("pnexport", "NotesExportHandler")
+    P:RegisterChatCommand("pnimport", "NotesImportHandler")
+    P:RegisterChatCommand("pndbcheck", "NotesDBCheckHandler")
 
     -- Create the LDB launcher
     D.noteLDB = LDB:NewDataObject("PlayerNotes", {
@@ -117,16 +116,12 @@ function P:OnInitialize()
     })
     icon:Register("PlayerNotesLDB", D.noteLDB, D.db.profile.minimap)
 
-    if not charNoteTooltip then
-        charNoteTooltip = P:CreateCharNoteTooltip()
-    end
-
     -- Hook any new temporary windows
     self:SecureHook("FCF_SetTemporaryWindowType")
     self:SecureHook("FCF_Close")
 
     P:ChatMessage(GREEN_FONT_COLOR_CODE.."Loaded PlayerNotes " .. ADDON_VERSION .. ". "
-        .. "Type '/notes help' to show the command line tools.")
+        .. "Type '/pn help' to show the command line tools.")
 end
 
 function P:FCF_SetTemporaryWindowType(chatFrame, chatType, chatTarget)
@@ -331,13 +326,13 @@ function P:NotesHandler(input)
         if input == "help" then
             print("Chat commands:")
             print("--------------------------------")
-            print("/notes help - Shows this message")
-            print("/notes - Brings up the GUI")
-            print("/searchnote <searchterm> - Brings up the GUI. Optional search term allows filtering the list of notes.")
-            print("/setnote <charname[-realm]> <note> - Sets a note for the character name specified.")
-            print("/delnote <charname[-realm]> - Deletes the note for the character name specified.")
-            print("/getnote <charname[-realm]> - Prints the note for the character name specified.")
-            print("/editnote [charname[-realm]] - Brings up a window to edit the note for the name specified or your target if no name if specified.")
+            print("/pn help - Shows this message")
+            print("/pn - Brings up the GUI")
+            print("/searchpn <searchterm> - Brings up the GUI. Optional search term allows filtering the list of notes.")
+            print("/setpn <charname[-realm]> <note> - Sets a note for the character name specified.")
+            print("/delpn <charname[-realm]> - Deletes the note for the character name specified.")
+            print("/getpn <charname[-realm]> - Prints the note for the character name specified.")
+            print("/editpn [charname[-realm]] - Brings up a window to edit the note for the name specified or your target if no name if specified.")
             return
         end
         notesFrame.searchterm:SetText(input)
@@ -364,7 +359,7 @@ function P:NotesOptionsHandler(input)
         if cmds[1] and cmds[1] == "debug" then
             if cmds[2] and cmds[2] == "on" then
                 D.db.profile.debug = true
-                self:Print("Debugging on.  Use '/notesoptions debug off' to disable.")
+                self:Print("Debugging on.  Use '/pnoptions debug off' to disable.")
             elseif cmds[2] and cmds[2] == "off" then
                 D.db.profile.debug = false
                 self:Print("Debugging off.")

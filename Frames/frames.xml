@@ -2,7 +2,6 @@
 xsi:schemaLocation="http://www.blizzard.com/wow/ui/
 ..\FrameXML\UI.xsd">
 <Script file="AddNoteFrame.lua"/>
-<Script file="CharNoteTooltip.lua"/>
 <Script file="ConfirmDeleteFrame.lua"/>
 <Script file="EditNoteFrame.lua"/>
 <Script file="NotesFrame.lua"/>
