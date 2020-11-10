@@ -7,4 +7,5 @@ xsi:schemaLocation="http://www.blizzard.com/wow/ui/
 <Script file="NotesFrame.lua"/>
 <Script file="NotesExportFrame.lua"/>
 <Script file="NotesImportFrame.lua"/>
+<Script file="CharNoteTooltip.lua"/>
 </Ui>

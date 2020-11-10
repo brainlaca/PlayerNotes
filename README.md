@@ -25,6 +25,7 @@ Notes can be set and managed:
 Additional Features:
 
 * LibAlt integration. See below. 
+* ElvUI skin support.
 
 Weakauras:
 

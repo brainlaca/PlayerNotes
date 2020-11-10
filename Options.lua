@@ -86,9 +86,9 @@ function P:GetOptions(Addon)
                         set = function(info, val)
                             D.db.profile.noteLinksInChat = val
                             if val then
-                                P:EnableNoteLinks()
+                                P:SendMessage('PN_EVENT_ENABLENOTELINKS')
                             else
-                                P:DisableNoteLinks()
+                                P:SendMessage('PN_EVENT_DISABLENOTELINKS')
                             end
                         end,
                         get = function(info) return D.db.profile.noteLinksInChat end,

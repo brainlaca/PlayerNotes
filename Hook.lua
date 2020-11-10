@@ -369,3 +369,147 @@ do
         end
     end
 end
+
+-- text href tooltip
+do
+    local chatTooltip = P:NewModule("CharNoteTooltip")
+    local noteLinkFmt = "%s|Hnote%s|h[%s]|h|r"
+
+    local function SetItemRef(link, text, button, ...)
+        if link and link:match("^note") then
+            local name = string.sub(link, 5)
+            name = N:FormatUnitName(name)
+            local note, nameFound = N:GetNote(name)
+
+            -- Display a link
+            _G.ShowUIPanel(D.CharNoteTooltip)
+            if (not D.CharNoteTooltip:IsVisible()) then
+                D.CharNoteTooltip:SetOwner(_G.UIParent, "ANCHOR_PRESERVE")
+            end
+
+            D.CharNoteTooltip:SetPadding(16, 0)
+            D.CharNoteTooltip:ClearLines()
+            D.CharNoteTooltip:AddLine(nameFound, 1, 1, 0)
+            D.CharNoteTooltip:AddLine(note or "", 1, 1, 1, true)
+            D.CharNoteTooltip:SetBackdropBorderColor(1, 1, 1, 1)
+            D.CharNoteTooltip:Show()
+
+            return nil
+        end
+
+        return P.hooks.SetItemRef(link, text, button, ...)
+    end
+
+    local function SetHyperlink(frame, link, ...)
+      if link and link:match("^note") then return end
+
+      return P.hooks[frame].SetHyperlink(frame, link, ...)
+    end
+
+    local function CreateNoteLink(name, text)
+        local rating = D.db.realm.ratings[name]
+
+        return noteLinkFmt:format(P:GetRatingColor(rating), name, text)
+    end
+
+    local function AddNoteForChat(message, name)
+        if name and #name > 0 then
+            local note, nameFound = N:GetNote(name)
+            if note and #note > 0 then
+                local messageFmt = "%s %s"
+                return messageFmt:format(message, CreateNoteLink(nameFound, "note"))
+            end
+        end
+
+        return message
+    end
+
+    local function AddMessage(frame, text, r, g, b, id, ...)
+        if text and _G.type(text) == "string" and D.db.profile.noteLinksInChat == true then
+            -- If no charnotes are present then insert one.
+            if text:find("|Hnote") == nil then
+                text = text:gsub("(|Hplayer:([^:]+).-|h.-|h)", AddNoteForChat)
+            end
+        end
+
+        return P.hooks[frame].AddMessage(frame, text, r, g, b, id, ...)
+    end
+
+    local function HookChatFrames()
+        for i = 1, _G.NUM_CHAT_WINDOWS do
+            local chatFrame = _G["ChatFrame" .. i]
+            if chatFrame ~= _G.COMBATLOG then
+                if not P:IsHooked(chatFrame, "AddMessage") then
+                    P:RawHook(chatFrame, "AddMessage", AddMessage, true)
+                end
+            end
+        end
+    end
+
+    local function UnhookChatFrames()
+        for i = 1, _G.NUM_CHAT_WINDOWS do
+            local chatFrame = _G["ChatFrame" .. i]
+            if chatFrame ~= _G.COMBATLOG then
+                P:Unhook(chatFrame, "AddMessage")
+            end
+        end
+    end
+
+    local function EnableNoteLinks()
+        if D.db.profile.noteLinksInChat == false then
+            return
+        end
+
+        -- Hook SetItemRef to create our own hyperlinks
+        if not P:IsHooked(nil, "SetItemRef") then
+    	    P:RawHook(nil, "SetItemRef", SetItemRef, true)
+        end
+
+        -- Hook SetHyperlink so we can redirect charnote links
+        if not P:IsHooked(_G.ItemRefTooltip, "SetHyperlink") then
+    	    P:RawHook(_G.ItemRefTooltip, "SetHyperlink", SetHyperlink, true)
+        end
+
+        -- Hook chat frames so we can edit the messages
+        HookChatFrames()
+    end
+
+    local function DisableNoteLinks()
+        P:Unhook(nil, "SetItemRef")
+        P:Unhook(_G.ItemRefTooltip, "SetHyperlink")
+        UnhookChatFrames()
+    end
+
+    local function FCF_SetTemporaryWindowType(chatFrame, chatType, chatTarget)
+        if chatFrame and not P:IsHooked(chatFrame, "AddMessage") then
+            P:RawHook(chatFrame, "AddMessage", AddMessage, true)
+        end
+    end
+
+    local function FCF_Close(frame, fallback)
+        if frame and P:IsHooked(frame, "AddMessage") then
+            P:Unhook(frame, "AddMessage", AddMessage)
+        end
+    end
+
+    function chatTooltip:CanLoad()
+        return D.CharNoteTooltip
+    end
+
+    function chatTooltip:OnLoad()
+        self:Enable()
+
+        EnableNoteLinks()
+
+        P:SecureHook("FCF_SetTemporaryWindowType", FCF_SetTemporaryWindowType)
+	    P:SecureHook("FCF_Close", FCF_Close)
+
+        P:RegisterMessage('PN_EVENT_ENABLENOTELINKS', function(_, name)
+            EnableNoteLinks()
+        end)
+
+        P:RegisterMessage('PN_EVENT_DISABLENOTELINKS', function(_, name)
+            DisableNoteLinks()
+        end)
+    end
+end

@@ -30,6 +30,7 @@ local editNoteFrame = nil
 local addNoteFrame = nil
 local confirmDeleteFrame = nil
 
+D.CharNoteTooltip = nil
 D.notesExportFrame = nil
 D.notesImportFrame = nil
 
@@ -116,24 +117,8 @@ function P:OnInitialize()
     })
     icon:Register("PlayerNotesLDB", D.noteLDB, D.db.profile.minimap)
 
-    -- Hook any new temporary windows
-    self:SecureHook("FCF_SetTemporaryWindowType")
-    self:SecureHook("FCF_Close")
-
     P:ChatMessage(GREEN_FONT_COLOR_CODE.."Loaded PlayerNotes " .. ADDON_VERSION .. ". "
         .. "Type '/pn help' to show the command line tools.")
-end
-
-function P:FCF_SetTemporaryWindowType(chatFrame, chatType, chatTarget)
-    if chatFrame and not self:IsHooked(chatFrame, "AddMessage") then
-        self:RawHook(chatFrame, "AddMessage", true)
-    end
-end
-
-function P:FCF_Close(frame, fallback)
-    if frame and self:IsHooked(frame, "AddMessage") then
-        self:Unhook(frame, "AddMessage")
-    end
 end
 
 function P:SetNoteHandler(input)
@@ -503,8 +488,12 @@ function P:OnEnable()
         end
     end)
 
+    if not D.CharNoteTooltip then
+        P:CreateCharNoteTooltip()
+    end
+
     P:SkinFrames({
-        notesFrame, editNoteFrame, addNoteFrame, confirmDeleteFrame
+        notesFrame, editNoteFrame, addNoteFrame, confirmDeleteFrame, D.CharNoteTooltip
     });
 
     playerName = _G.GetUnitName("player", true)
@@ -575,34 +564,6 @@ function P:GetRatingColorForPlayer(name)
 
     local rating = N:GetRating(nameFound)
     return P:GetRatingColor(rating)
-end
-
-local noteLinkFmt = "%s|Hcharnote:%s|h[%s]|h|r"
-function P:CreateNoteLink(name, text)
-    local rating = D.db.realm.ratings[name]
-    return noteLinkFmt:format(P:GetRatingColor(rating), name, text)
-end
-
-local function AddNoteForChat(message, name)
-    if name and #name > 0 then
-        local note, nameFound = N:GetNote(name)
-        if note and #note > 0 then
-            local messageFmt = "%s %s"
-            return messageFmt:format(message, P:CreateNoteLink(nameFound, "note"))
-        end
-    end
-
-    return message
-end
-
-function P:AddMessage(frame, text, r, g, b, id, ...)
-    if text and _G.type(text) == "string" and D.db.profile.noteLinksInChat == true then
-        -- If no charnotes are present then insert one.
-        if text:find("|Hcharnote:") == nil then
-            text = text:gsub("(|Hplayer:([^:]+).-|h.-|h)", AddNoteForChat)
-        end
-    end
-    return self.hooks[frame].AddMessage(frame, text, r, g, b, id, ...)
 end
 
 function P:CHAT_MSG_SYSTEM(event, message)
