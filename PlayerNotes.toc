@@ -1,4 +1,4 @@
-## Interface: 90001
+## Interface: 90002
 ## Title: Player Notes
 ## Notes: Set and manage player notes that are displayed in unit tooltips.
 ## Author: Various Artists
